@@ -11,7 +11,7 @@ layout {
     // 从 glassy-niri 引入的平铺区深色背景，取消注释可体验：
     // background-color "00000020"
     background-color "transparent"
-    gaps 12
+    gaps 16
     center-focused-column "never"
     always-center-single-column
     preset-column-widths {
@@ -23,9 +23,9 @@ layout {
     focus-ring {
         off
         width 0
-        active-color "#b6c7e7"
-        inactive-color "#131315"
-        urgent-color "#ffb4ab"
+        active-color "#62d8e7"
+        inactive-color "#111820"
+        urgent-color "#ff9f8e"
     }
     shadow {
         on
@@ -36,12 +36,12 @@ layout {
     }
 
     tab-indicator {
-        active-color "#b6c7e7"
-        inactive-color "#374761"
-        urgent-color "#ffb4ab"
+        active-color "#62d8e7"
+        inactive-color "#24313b"
+        urgent-color "#ff9f8e"
     }
 
     insert-hint {
-        color "#b6c7e780"
+        color "#62d8e780"
     }
 }

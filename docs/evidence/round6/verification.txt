@@ -1,0 +1,59 @@
+NyxNiri round6 verification record
+Date: 2026-08-24
+
+Baseline
+Command: sha256sum <target files> > docs/evidence/round6/baseline.sha256
+Input: 18 existing target files listed in baseline.sha256
+Output: 18 hash lines written; status=0
+First recorded hash: 7712f04d621c5e37b0910a568b28777a6f7fc2a48e03beb30992561f28d8f2a9 configs/niri/config.kdl
+
+Modified artifact
+Command: sha256sum <target files> > docs/evidence/round6/modified.sha256
+Output: 18 hash lines written; status=0
+Command: sha256sum configs/niri/rules_optional.kdl configs/yazi/keymap.toml > docs/evidence/round6/new-files.sha256
+Output: 2 hash lines written; status=0
+Command: diff -u baseline originals against current targets > docs/evidence/round6/round6.patch
+Output: 482 lines; status=0 (diff exits 1 for changed files and was collected with || true)
+
+Static checks
+Command: git diff --check
+Output: no output; status=0
+Command: python3 -m compileall -q nyxniri
+Output: no output; status=0
+Command: bash -n install.sh configs/noctalia/*.sh configs/niri/scripts/*.sh configs/mpv-nyx/*.sh docs/evidence/round6/rollback.sh
+Output: no output; status=0
+Command: fish -n configs/fish/config.fish
+Output: no output; status=0
+Command: shellcheck install.sh configs/noctalia/*.sh configs/niri/scripts/*.sh configs/mpv-nyx/*.sh docs/evidence/round6/rollback.sh
+Output: no output; status=0
+Command: JSONC/TOML parser for Noctalia, Starship, Yazi, Zed, Fastfetch
+Output: all six files PASS; status=0
+
+Project checks
+Command: python3 -m unittest discover -s tests -v
+Output: Ran 13 tests in 0.014s; OK; status=0
+Command: HOME=<temporary> ./install.sh test
+Output: 14 configs deployed; Test deploy complete; status=0
+Command: niri validate --config <temporary>/.config/niri/config.kdl
+Output: INFO niri: config is valid; status=0
+Command: fastfetch --config <temporary>/.config/fastfetch/config.jsonc
+Output: NyxNiri system/hardware sections rendered; status=0
+Command: env XDG_CONFIG_HOME=<temporary> NVIM_APPNAME=nvim-nyx nvim --headless +'qa!'
+Output: no output; status=0
+Command: yazi --debug --help
+Output: Usage: yazi [OPTIONS] [ENTRIES]...; status=0
+Command: mpv --config-dir=<temporary>/profile --no-video --ao=null --keep-open=no --idle=no /tmp/nyx-silence.wav
+Input: 0.1 second generated silent WAV
+Output: AO: [null] 8000Hz mono 1ch s16; Exiting... (End of file); status=0
+Command: btop --config configs/btop/btop.conf --themes-dir configs/btop/themes --preset 0 --no-tty in a 120x40 PTY
+Output: Nyx cyan/coral panel rendered; process timed out after 4 seconds while remaining interactive; status=124 (expected interactive TUI behavior)
+Command: btop --config configs/btop/btop.conf --themes-dir configs/btop/themes --preset 4 --no-tty in a 120x40 PTY
+Output: GPU preset rendered and GPU surface detected; status=124 (expected interactive TUI behavior)
+Command: Python YAML parser for configs/vivid/themes/nyx.yml
+Output: vivid_yaml=PASS True; status=0
+Command: sha256sum -c docs/evidence/round6/modified.sha256
+Output: all 18 target files OK; status=0
+
+Rollback
+Command: docs/evidence/round6/rollback.sh in an isolated repository copy
+Expected: modified hashes validated, baseline files restored, two new files removed, baseline hash check status=0

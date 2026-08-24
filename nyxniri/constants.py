@@ -69,6 +69,14 @@ OPTIONAL_APPS = [
     "nautilus",
     "missioncenter",
     "fcitx5-rime",
+    "yazi",
+    "btop",
+    "duf",
+    "bat",
+    "procs",
+    "dust",
+    "git-delta",
+    "vivid",
 ]
 
 # --- ANSI Styling Palette (NyxNiri Native) ---

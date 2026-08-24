@@ -677,6 +677,50 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "zh": "Fcitx5 + 雾凇拼音 (输入法)",
         "en": "Fcitx5 + Rime Ice (Input Method)",
     },
+    "app_yazi": {
+        "zh": "Yazi (文件管理器)",
+        "en": "Yazi (File Manager)",
+    },
+    "app_btop": {
+        "zh": "btop (系统监视器)",
+        "en": "btop (System Monitor)",
+    },
+    "app_duf": {
+        "zh": "duf (磁盘用量)",
+        "en": "duf (Disk Usage)",
+    },
+    "app_bat": {
+        "zh": "bat (代码预览)",
+        "en": "bat (Code Preview)",
+    },
+    "app_atuin": {
+        "zh": "Atuin (历史搜索)",
+        "en": "Atuin (History Search)",
+    },
+    "app_television": {
+        "zh": "Television (高级模糊搜索)",
+        "en": "Television (Fuzzy Search)",
+    },
+    "app_procs": {
+        "zh": "procs (进程查看)",
+        "en": "procs (Process Viewer)",
+    },
+    "app_dust": {
+        "zh": "dust (目录占用分析)",
+        "en": "dust (Directory Usage)",
+    },
+    "app_git_delta": {
+        "zh": "git-delta (Git 差异高亮)",
+        "en": "git-delta (Git Diff Pager)",
+    },
+    "app_vivid": {
+        "zh": "vivid (文件颜色主题)",
+        "en": "vivid (File Colors)",
+    },
+    "app_superfile": {
+        "zh": "superfile (全屏文件管理器)",
+        "en": "superfile (File Manager)",
+    },
     "installing_selected_apps": {
         "zh": f"\n{Colors.BOLD_BLUE}:: 正在安装常用软件…{Colors.RESET}",
         "en": f"\n{Colors.BOLD_BLUE}:: Installing recommended apps…{Colors.RESET}",

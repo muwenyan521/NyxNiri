@@ -11,6 +11,8 @@ binds {
     // -------------------------------------------------------------------------
     // 切换概览视角 (禁止按键重复) / Toggle workspace overview (prevent key repeat)
     Mod+Tab repeat=false { toggle-overview; }
+    Mod+O repeat=false { toggle-overview; }
+    Mod+G repeat=false { toggle-overview; }
 
     // 关闭当前获得焦点的窗口 / Close active focused window
     Mod+Q { close-window; }
@@ -19,49 +21,57 @@ binds {
     Mod+Shift+Q { quit; }
 
     // 重新加载 Niri 配置文件 / Reload Niri configuration file
-    Mod+Shift+R { spawn "niri" "msg" "action" "load-config-file"; }
+    Mod+Ctrl+Shift+R { spawn "niri" "msg" "action" "load-config-file"; }
 
     // 锁定屏幕 (使用 Noctalia 原生锁屏) / Lock screen using Noctalia native lockscreen
-    Mod+L { spawn "noctalia" "msg" "session" "lock"; }
+    Mod+Alt+L { spawn "noctalia" "msg" "session" "lock"; }
 
     // 显示快捷键提示覆盖层 / Show interactive hotkey overlay
-    Mod+Slash { show-hotkey-overlay; }
+    Mod+Shift+Slash { show-hotkey-overlay; }
 
     // -------------------------------------------------------------------------
     // 2. 应用启动与 Noctalia 组件 / App Launchers & Noctalia Panels
     // -------------------------------------------------------------------------
     // 启动终端模拟器 (Kitty) / Launch terminal emulator (Kitty)
     Mod+Return { spawn "kitty"; }
+    Mod+T { spawn "kitty" "--single-instance"; }
+    Mod+Slash { spawn "~/.config/niri/scripts/niri-scratch-toggle.sh" "kitty"; }
+    Mod+B { spawn "firefox"; }
 
-    // 启动文件管理器 (Nautilus) / Launch file manager (Nautilus)
-    Mod+E { spawn "nautilus"; }
+    // 启动 Yazi 文件管理器 / Launch the Yazi file manager
+    Mod+E { spawn "kitty" "--single-instance" "--title" "Nyx Files" "fish" "-ic" "y"; }
 
-    // 切换 Noctalia 应用启动器 / Toggle Noctalia application launcher
-    Mod+R { spawn "noctalia" "msg" "panel-toggle" "launcher"; }
+    // 按 Shorin 习惯切换预设列宽 / Switch preset column width using the Shorin key
+    Mod+R { switch-preset-column-width; }
+    Mod+F2 { spawn "noctalia" "msg" "settings-toggle"; }
+    Mod+Shift+Z { spawn "noctalia" "msg" "panel-toggle" "launcher"; }
 
     // 切换 Noctalia 电源/会话菜单 / Toggle Noctalia power/session menu
-    Mod+X { spawn "noctalia" "msg" "panel-toggle" "session"; }
+    Mod+Alt+X { spawn "noctalia" "msg" "panel-toggle" "session"; }
 
-    // 切换 Noctalia 系统设置面板 / Toggle Noctalia system settings panel
-    Mod+I { spawn "noctalia" "msg" "settings-toggle"; }
+    // 按 Shorin 习惯切换工作区 / Focus the previous workspace using the Shorin key
+    Mod+I { focus-workspace-up; }
 
     // 切换 Noctalia 剪贴板历史 / Toggle Noctalia clipboard history panel
-    Mod+V { spawn "noctalia" "msg" "panel-toggle" "clipboard"; }
+    Mod+Alt+V { spawn "noctalia" "msg" "panel-toggle" "clipboard"; }
 
     // 呼出 M3E 原生壁纸选择器 (聚合静态/动态壁纸/搜索/分类) / Open M3E wallpaper picker (Static & Live)
-    Mod+W repeat=false { spawn "~/.config/niri/scripts/wallpaper-picker.py"; }
+    Mod+W { focus-window-or-workspace-up; }
+    Mod+Alt+W repeat=false { spawn "~/.config/niri/scripts/wallpaper-picker.py"; }
 
     // 免打扰随机切换下一张壁纸 (主题取色自动跟随更新) / Switch to a random wallpaper immediately
-    Mod+Ctrl+W { spawn "noctalia" "msg" "wallpaper-random"; }
+    Mod+Ctrl+W { move-window-up; }
+    Mod+Ctrl+Alt+W { spawn "noctalia" "msg" "wallpaper-random"; }
 
     // 切换护眼模式 (调暖色温并关闭透明度/毛玻璃) / Toggle eye-care mode (warmer temp & disable blur/transparency)
-    Mod+N { spawn "~/.config/niri/scripts/toggle-eyecare.sh"; }
+    Mod+N { switch-focus-between-floating-and-tiling; }
+    Mod+Shift+N { spawn "~/.config/niri/scripts/toggle-eyecare.sh"; }
 
     // 快速切换 Kitty 专属 Scratchpad 终端 / Toggle Kitty scratchpad terminal
     Mod+Grave { spawn "~/.config/niri/scripts/niri-scratch-toggle.sh" "kitty"; }
 
-    // 呼出 Orbit Launcher M3E 矢量星环启动器 (按住 Super 点鼠标前侧键，或键盘 Mod+A) / Open Orbit Launcher M3E radial menu
-    Mod+A repeat=false { spawn "~/.config/niri/scripts/orbit-launcher.py"; }
+    // 呼出 Orbit Launcher M3E 矢量星环启动器 / Open Orbit Launcher M3E radial menu
+    Mod+Alt+Z repeat=false { spawn "~/.config/niri/scripts/orbit-launcher.py"; }
     Mod+MouseForward repeat=false { spawn "~/.config/niri/scripts/orbit-launcher.py"; }
 
     // -------------------------------------------------------------------------
@@ -72,9 +82,12 @@ binds {
     Mod+Right { focus-column-or-monitor-right; }
     Mod+Down  { focus-window-or-workspace-down; }
     Mod+Up    { focus-window-or-workspace-up; }
+    Mod+H     { focus-column-left; }
+    Mod+J     { focus-window-down; }
+    Mod+K     { focus-window-up; }
+    Mod+L     { focus-column-right; }
 
     // 列焦点快速横滑 (左 / 右) / Column focus left / right
-    Mod+Z { focus-column-left; }
     Mod+C { focus-column-right; }
 
     // 智能窗口/列搬运 (推至边缘时自动搬运至相邻显示器或工作区) / Smart movement (auto move to monitor & workspace)
@@ -82,6 +95,12 @@ binds {
     Mod+Ctrl+Right { move-column-right-or-to-monitor-right; }
     Mod+Ctrl+Down  { move-window-down-or-to-workspace-down; }
     Mod+Ctrl+Up    { move-window-up-or-to-workspace-up; }
+    Mod+Ctrl+H     { move-column-left; }
+    Mod+Ctrl+J     { move-window-down; }
+    Mod+Ctrl+K     { move-window-up; }
+    Mod+Ctrl+L     { move-column-right; }
+    Mod+Ctrl+A     { move-column-left; }
+    Mod+Ctrl+D     { move-column-right; }
 
     // Shift 辅助精准移动 (4 方向完整对称) / Precision movement with Shift modifier
     Mod+Shift+Left  { move-column-left; }
@@ -90,8 +109,18 @@ binds {
     Mod+Shift+Up    { move-window-up; }
 
     // 工作区方向导航 (Down / Up) / Workspace Navigation
-    Mod+D { focus-workspace-down; }
+    Mod+D { consume-or-expel-window-right; }
     Mod+U { focus-workspace-up; }
+    Mod+S { focus-window-or-workspace-down; }
+    Mod+Ctrl+S { move-window-down; }
+    Mod+Page_Down { focus-workspace-down; }
+    Mod+Page_Up { focus-workspace-up; }
+    Mod+Ctrl+U { move-column-to-workspace-down; }
+    Mod+Ctrl+I { move-column-to-workspace-up; }
+    Mod+Shift+Page_Down { move-workspace-down; }
+    Mod+Shift+Page_Up { move-workspace-up; }
+    Mod+Shift+U { move-workspace-down; }
+    Mod+Shift+I { move-workspace-up; }
 
     // 显示器精准导航与搬运 / Precision Multi-Monitor Navigation
     Mod+Shift+Ctrl+Left  { move-column-to-monitor-left; }
@@ -103,22 +132,27 @@ binds {
     // 4. 窗口布局与尺寸调整 / Window Layout & Sizing
     // -------------------------------------------------------------------------
     // 切换当前窗口的浮动/平铺状态 / Toggle window floating state
-    Mod+T { toggle-window-floating; }
+    Mod+V { toggle-window-floating; }
 
     // 平铺与浮动窗口之间穿透转移焦点 / Switch focus between floating and tiling layout
     Mod+Shift+T { switch-focus-between-floating-and-tiling; }
+    Mod+Shift+V { switch-focus-between-floating-and-tiling; }
 
     // 切换当前列为标签页分组模式 (Tabbed Group) / Toggle column tabbed display
-    Mod+G { toggle-column-tabbed-display; }
+    Mod+X { toggle-column-tabbed-display; }
+    Mod+Shift+X { toggle-column-tabbed-display; }
 
     // 最大化当前列宽度 / Maximize column width
     Mod+F { maximize-column; }
 
     // 全屏显示当前窗口 / Fullscreen focused window
     Mod+Shift+F { fullscreen-window; }
+    Mod+Alt+F { fullscreen-window; }
 
     // 循环切换预设列宽比例 / Switch preset column widths
     Mod+Space { switch-preset-column-width; }
+    Mod+Shift+R { switch-preset-window-height; }
+    Mod+Ctrl+R { reset-window-height; }
 
     // 微调列宽与高度重置 / Fine-tune column width & reset height
     Mod+Minus { set-column-width "-5%"; }
@@ -130,6 +164,9 @@ binds {
 
     // 将当前窗口从列中分离吐出 / Expel window from current column
     Mod+Period { expel-window-from-column; }
+    Mod+A { consume-or-expel-window-left; }
+    Mod+Shift+A { consume-window-into-column; }
+    Mod+Shift+D { expel-window-from-column; }
 
     // -------------------------------------------------------------------------
     // 5. 工作区管理 (1-9) / Workspace Management (1-9)
@@ -146,15 +183,15 @@ binds {
     Mod+9 { focus-workspace 9; }
 
     // 将当前列移动至指定编号工作区 / Move focused column to workspace by index
-    Mod+Shift+1 { move-column-to-workspace 1; }
-    Mod+Shift+2 { move-column-to-workspace 2; }
-    Mod+Shift+3 { move-column-to-workspace 3; }
-    Mod+Shift+4 { move-column-to-workspace 4; }
-    Mod+Shift+5 { move-column-to-workspace 5; }
-    Mod+Shift+6 { move-column-to-workspace 6; }
-    Mod+Shift+7 { move-column-to-workspace 7; }
-    Mod+Shift+8 { move-column-to-workspace 8; }
-    Mod+Shift+9 { move-column-to-workspace 9; }
+    Mod+Ctrl+1 { move-column-to-workspace 1; }
+    Mod+Ctrl+2 { move-column-to-workspace 2; }
+    Mod+Ctrl+3 { move-column-to-workspace 3; }
+    Mod+Ctrl+4 { move-column-to-workspace 4; }
+    Mod+Ctrl+5 { move-column-to-workspace 5; }
+    Mod+Ctrl+6 { move-column-to-workspace 6; }
+    Mod+Ctrl+7 { move-column-to-workspace 7; }
+    Mod+Ctrl+8 { move-column-to-workspace 8; }
+    Mod+Ctrl+9 { move-column-to-workspace 9; }
 
     // -------------------------------------------------------------------------
     // 6. 鼠标与滚轮绑定 / Mouse & Wheel Binds
@@ -183,19 +220,27 @@ binds {
     // 7. 多媒体与硬件控制 / Multimedia & Hardware Control
     // -------------------------------------------------------------------------
     // 音量加 / 减 / 静音 (WirePlumber) / Volume Up / Down / Mute via WirePlumber
-    XF86AudioRaiseVolume { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%+"; }
-    XF86AudioLowerVolume { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%-"; }
-    XF86AudioMute        { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
+    XF86AudioRaiseVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%+"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%-"; }
+    XF86AudioMute        allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
+    XF86AudioMicMute     allow-when-locked=true { spawn-sh "command -v playerctl >/dev/null && playerctl stop"; }
+    XF86AudioPlay        allow-when-locked=true { spawn-sh "command -v playerctl >/dev/null && playerctl play-pause"; }
+    XF86AudioPause       allow-when-locked=true { spawn-sh "command -v playerctl >/dev/null && playerctl play-pause"; }
+    XF86AudioPrev        allow-when-locked=true { spawn-sh "command -v playerctl >/dev/null && playerctl previous"; }
+    XF86AudioNext        allow-when-locked=true { spawn-sh "command -v playerctl >/dev/null && playerctl next"; }
 
     // 外接显示器硬件亮度调节 (ddcutil, 允许锁屏状态下生效) / DDC monitor brightness control (allow when locked)
-    XF86MonBrightnessUp   allow-when-locked=true { spawn "sh" "-c" "ddcutil setvcp 10 + 10"; }
-    XF86MonBrightnessDown allow-when-locked=true { spawn "sh" "-c" "ddcutil setvcp 10 - 10"; }
+    XF86MonBrightnessUp   allow-when-locked=true { spawn-sh "command -v ddcutil >/dev/null && ddcutil setvcp 10 + 10 || command -v brightnessctl >/dev/null && brightnessctl set 5%+"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn-sh "command -v ddcutil >/dev/null && ddcutil setvcp 10 - 10 || command -v brightnessctl >/dev/null && brightnessctl set 5%-"; }
 
     // -------------------------------------------------------------------------
     // 8. 截图按键控制 / Screenshot Controls
     // -------------------------------------------------------------------------
     // 交互式区域截图 / Interactive region screenshot
     Mod+Shift+S { screenshot; }
+    Mod+Alt+A { screenshot; }
+    Mod+Alt+Ctrl+A { screenshot-window; }
+    Mod+Alt+Ctrl+Shift+A { screenshot-screen; }
     Print       { screenshot; }
 
     // 截取整个显示器屏幕 / Fullscreen screenshot
@@ -203,4 +248,8 @@ binds {
 
     // 截取当前活动窗口 / Active window screenshot
     Alt+Print   { screenshot-window; }
+    Shift+Print { screenshot-screen; }
+    Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
+    Mod+Shift+E { quit; }
+    Mod+Shift+P { power-off-monitors; }
 }

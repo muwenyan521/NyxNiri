@@ -383,7 +383,8 @@ class OrbitLauncher(Gtk.Window):
     def set_anchor_center(self, cursor_x: float, cursor_y: float):
         w = self.get_allocated_width() or 1920
         h = self.get_allocated_height() or 1080
-        pad_x, pad_y = 250.0, 210.0
+        scale = max(0.72, min(1.15, min(w / 1920.0, h / 1080.0)))
+        pad_x, pad_y = 250.0 * scale, 210.0 * scale
         self.center_x = max(pad_x, min(w - pad_x, cursor_x))
         self.center_y = max(pad_y, min(h - pad_y, cursor_y))
         self.origin_locked = True
@@ -675,7 +676,7 @@ class OrbitLauncher(Gtk.Window):
                     self.search_spring.target = 0.0
                     self._request_frame()
                     return True
-                elif keyval in (Gdk.KEY_BackSpace, Gdk.KEY_w, Gdk.KEY_W):
+                elif keyval in (Gdk.KEY_w, Gdk.KEY_W):
                     words = self.search_query.rstrip().rsplit(None, 1)
                     self.search_query = words[0] if len(words) > 1 else ""
                     if not self.search_query:
@@ -694,7 +695,11 @@ class OrbitLauncher(Gtk.Window):
 
             # Backspace -> delete character (collapse when empty)
             if keyval == Gdk.KEY_BackSpace:
-                self.search_query = self.search_query[:-1]
+                if ctrl:
+                    words = self.search_query.rstrip().rsplit(None, 1)
+                    self.search_query = words[0] if len(words) > 1 else ""
+                else:
+                    self.search_query = self.search_query[:-1]
                 if not self.search_query:
                     self.search_active = False
                     self.search_spring.target = 0.0
@@ -715,6 +720,13 @@ class OrbitLauncher(Gtk.Window):
             # Return / Enter -> execute web search
             if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
                 if self.search_query.strip():
+                    query = self.search_query.strip().lower()
+                    for app in self.apps:
+                        name = str(app.get("name", "")).lower()
+                        command = str(app.get("cmd", app.get("id", ""))).lower()
+                        if query == name or query == command or name.startswith(query):
+                            self.trigger_app(app)
+                            return True
                     self.trigger_search()
                 return True
 
@@ -852,7 +864,10 @@ class OrbitLauncher(Gtk.Window):
         core_y = cy + self.core_spring_y.current
 
         search_disp = search_prog * 20.0 if not is_submenu else 0.0
-        orbit_r = max(BASE_ORBIT_RADIUS, 120.0 + self.num_items * 12.0) + search_disp
+        win_w = self.get_allocated_width() or 1920.0
+        win_h = self.get_allocated_height() or 1080.0
+        geometry_scale = max(0.72, min(1.15, min(win_w / 1920.0, win_h / 1080.0)))
+        orbit_r = max(BASE_ORBIT_RADIUS * geometry_scale, (120.0 + self.num_items * 12.0) * geometry_scale) + search_disp
 
         # 2. Celestial Star-Ring
         if outer_alpha > 0.01:

@@ -29,16 +29,29 @@
 
 </div>
 
+## Personal Preference Edition
+
+This repository is my personal preference set built on top of NyxNiri. The
+changes in this checkout focus on the way I use a Niri desktop: a tighter Nyx
+token palette, Shorin Niri keybindings, quieter shell feedback, and isolated
+Kitty, Yazi, btop, mpv, Neovim, and Zed profiles. Niri, Noctalia, and Orbit
+remain the core components; this is a preference-oriented configuration rather
+than a new upstream default. Review the configuration before deploying it to a
+different machine.
+
 ## Features
 
-- Wallpaper Picker (`Super+W`) — Unified static and live wallpaper picker with search and category filters.
+- Wallpaper Picker (`Super+Alt+W`) — Unified static and live wallpaper picker with search and category filters.
+- The picker adapts between two and four columns and gives explicit empty and no-result states.
 - Wallpaper Color Sync — Noctalia V5 extracts palettes directly from wallpaper; an `mpvpaper` hook extracts video frames via `ffmpeg` for live wallpapers.
 - Light/dark sync — GSettings, GTK 3/4, XDG Desktop Portal, Kitty, and browsers (Brave, Chromium, Firefox) update together when the theme changes.
-- Eye Care Mode (`Super+N`) — warmer color temperature, zero blur, solid opaque windows for reading sessions.
-- Scratchpad Terminal (`Super+~`) — quick-toggle persistent Kitty floating terminal anytime.
-- Orbit Launcher (`Super+A` / `Super+MouseForward`) — vector radial launcher for apps, tools, web links, and AI/search dial (fully configurable via TOML).
+- Eye Care Mode (`Super+Shift+N`) — warmer color temperature, zero blur, solid opaque windows for reading sessions.
+- Scratchpad Terminal (`Super+~` or `Super+/`) — quick-toggle persistent Kitty floating terminal anytime.
+- Orbit Launcher (`Super+Alt+Z` / `Super+MouseForward`) — vector radial launcher for apps, tools, web links, and AI/search dial (fully configurable via TOML).
 - Shell & Terminal — Fish aliases for proxy/cache management, Kitty cursor trails, Windows-style shortcuts.
+- Personal preference layer — explicit proxy checks, compact Git prompt status, scrollback helpers, GPU-aware btop preset, Yazi shortcuts, and Nyx-themed editor/media profiles.
 - NyxMellow — a dynamic fcitx5 skin: mellow rounded geometry with Noctalia Material You color palette.
+- Design tokens — colors, spacing, shapes and motion live in `DESIGN.md` and the token files; set `NYXNIRI_REDUCED_MOTION=1` to settle transitions immediately.
 
 ## Requirements
 
@@ -108,6 +121,12 @@ NyxNiri
     ├── kitty/                  # terminal
     ├── fish/                   # aliases + functions
     ├── fastfetch/              # system info
+    ├── yazi/                   # file manager theme and preview defaults
+    ├── btop/                   # system monitor theme
+    ├── vivid/                  # shared file-color theme
+    ├── mpv-nyx/                # isolated Nyx mpv profile
+    ├── nvim-nyx/               # isolated Nyx Neovim profile
+    ├── bin/                    # Shorin-contrib command components (~/.local/bin)
     ├── zed/                    # editor
     └── starship.toml           # prompt
 ```
@@ -155,6 +174,11 @@ NyxNiri
 | `nyxhelp pkg` | Package shortcuts (`up`, `in`, `se`, `un`, `clean`) |
 | `nyxhelp all` | Full cheatsheet |
 
+Shorin-contrib command components are installed as opt-in commands under
+`~/.local/bin`: `preview`, `lsi`, `timer`, `procusage`, `pac`, `pacr`, `pak`,
+`quicksave`, `quickload`, `sysup`, `shorin-clean`, and the media helpers.
+They do not replace `ls`, `cat`, `ps`, or other shell primitives.
+
 ## Keybindings
 
 <details>
@@ -164,17 +188,18 @@ NyxNiri
 | :--- | :--- |
 | <kbd>Super</kbd> + <kbd>Enter</kbd> | Open terminal |
 | <kbd>Super</kbd> + <kbd>Q</kbd> | Close window |
-| <kbd>Super</kbd> + <kbd>T</kbd> | Toggle floating/tiling |
+| <kbd>Super</kbd> + <kbd>T</kbd> | Open a Kitty terminal |
+| <kbd>Super</kbd> + <kbd>V</kbd> | Toggle floating/tiling |
 | <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> | Switch focus between floating and tiling |
-| <kbd>Super</kbd> + <kbd>G</kbd> | Toggle tabbed column display (Tabbed Group) |
+| <kbd>Super</kbd> + <kbd>X</kbd> | Toggle tabbed column display (Tabbed Group) |
 | <kbd>Super</kbd> + <kbd>F</kbd> | Maximize current column |
 | <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd> | Fullscreen |
 | <kbd>Super</kbd> + <kbd>Tab</kbd> | Workspace overview |
-| <kbd>Super</kbd> + <kbd>Z</kbd> / <kbd>C</kbd> | Focus left / right column |
+| <kbd>Super</kbd> + <kbd>H</kbd> / <kbd>L</kbd> | Focus left / right column |
 | <kbd>Super</kbd> + <kbd>Arrows</kbd> | Smart focus (column/monitor/workspace) |
 | <kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>Arrows</kbd> | Smart move (column/monitor/workspace) |
 | <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>Arrows</kbd> | Precision local move (incl. within column) |
-| <kbd>Super</kbd> + <kbd>D</kbd> / <kbd>U</kbd> | Workspace down/up |
+| <kbd>Super</kbd> + <kbd>D</kbd> / <kbd>U</kbd> | Move window right / focus workspace up |
 | <kbd>Super</kbd> + <kbd>Space</kbd> | Switch preset column widths |
 | <kbd>Super</kbd> + <kbd>-</kbd> / <kbd>=</kbd> | Decrease/increase column width |
 
@@ -185,25 +210,25 @@ NyxNiri
 
 | Shortcut | Action |
 | :--- | :--- |
-| <kbd>Super</kbd> + <kbd>R</kbd> | App launcher |
-| <kbd>Super</kbd> + <kbd>E</kbd> | File manager |
-| <kbd>Super</kbd> + <kbd>X</kbd> | Power menu |
-| <kbd>Super</kbd> + <kbd>I</kbd> | Control center |
-| <kbd>Super</kbd> + <kbd>V</kbd> | Clipboard history |
-| <kbd>Super</kbd> + <kbd>W</kbd> | Wallpaper picker (static & live) |
-| <kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>W</kbd> | Switch to random wallpaper |
-| <kbd>Super</kbd> + <kbd>N</kbd> | Toggle Eye Care Mode |
-| <kbd>Super</kbd> + <kbd>~</kbd> | Toggle Kitty scratchpad terminal |
-| <kbd>Super</kbd> + <kbd>A</kbd> / <kbd>Super</kbd> + <kbd>Mouse Forward</kbd> | Orbit vector radial launcher |
-| <kbd>Super</kbd> + <kbd>L</kbd> | Lock screen |
+| <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> | App launcher |
+| <kbd>Super</kbd> + <kbd>E</kbd> | Yazi file manager |
+| <kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>X</kbd> | Power menu |
+| <kbd>Super</kbd> + <kbd>F2</kbd> | Control center |
+| <kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>V</kbd> | Clipboard history |
+| <kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>W</kbd> | Wallpaper picker (static & live) |
+| <kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>W</kbd> | Switch to random wallpaper |
+| <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>N</kbd> | Toggle Eye Care Mode |
+| <kbd>Super</kbd> + <kbd>~</kbd> / <kbd>Super</kbd> + <kbd>/</kbd> | Toggle Kitty scratchpad terminal |
+| <kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>Z</kbd> / <kbd>Super</kbd> + <kbd>Mouse Forward</kbd> | Orbit vector radial launcher |
+| <kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>L</kbd> | Lock screen |
 | <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd> | Screenshot |
-| <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> | Reload Niri |
-| <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>Q</kbd> | Quit Niri |
+| <kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> | Reload Niri |
+| <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd> | Quit Niri |
 
 </details>
 
 > [!TIP]
-> Quick reference: `nyxhelp keys`. For Niri's full overlay, press <kbd>Super</kbd> + <kbd>/</kbd>.
+> Quick reference: `nyxhelp keys`. For Niri's full overlay, press <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>/</kbd>.
 
 ## Optional Modules
 

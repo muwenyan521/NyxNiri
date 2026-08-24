@@ -1,0 +1,247 @@
+[audio]
+enable_overdrive = true
+
+[backdrop]
+blur_intensity = 0.68999998457729816
+tint_intensity = 0.0
+
+[bar]
+order = ["bar"]
+
+[bar.bar]
+background_opacity = 0.0
+border_width = 0.0
+capsule = true
+capsule_border = "outline"
+capsule_foreground = "secondary"
+capsule_opacity = 0.79
+capsule_padding = 10.0
+capsule_radius = 80
+capsule_thickness = 0.95999998226761818
+enabled = true
+panel_overlap = 12
+font_family = "JetBrains Mono"
+margin_ends = 14
+margin_edge = 10
+scale = 1.1
+shadow = false
+end = [
+    "media",
+    "tray",
+    "wallpaper",
+    "mpvpaper",
+    "volume",
+    "notifications",
+    "session",
+]
+center = ["clock"]
+start = ["launcher", "workspaces", "active_window"]
+thickness = 36
+
+[battery.device."/org/freedesktop/UPower/devices/battery_hidpp_battery_0"]
+warning_threshold = 30
+
+[brightness]
+enable_ddcutil = false
+
+[desktop_widgets]
+schema_version = 2
+widget_order = ["desktop-widget-0000000000000003"]
+
+[desktop_widgets.grid]
+cell_size = 16
+major_interval = 4
+visible = true
+
+[desktop_widgets.widget.desktop-widget-0000000000000003]
+box_height = 0.0
+box_width = 0.0
+cx = 1280.0
+cy = 720.0
+rotation = 0.0
+type = "fancy_audio_visualizer"
+
+[desktop_widgets.widget.desktop-widget-0000000000000003.settings]
+background = false
+visualization_mode = "wave_rings"
+
+[dock]
+auto_hide = false
+enabled = true
+margin_edge = 10
+radius = 20
+reserve_space = false
+show_dots = true
+smart_auto_hide = true
+
+[idle]
+behavior_order = [ "lock", "screen-off", "lock-and-suspend" ]
+
+    [idle.behavior.lock]
+    action = "lock"
+    enabled = true
+    timeout = 300.0
+
+    [idle.behavior.lock-and-suspend]
+    action = "lock_and_suspend"
+    enabled = true
+    timeout = 900.0
+
+    [idle.behavior.screen-off]
+    action = "screen_off"
+    enabled = true
+    timeout = 360.0
+
+[hooks]
+theme_mode_changed = ["~/.config/noctalia/theme-sync.sh"]
+wallpaper_changed = ["~/.config/noctalia/wallpaper-hook.sh"]
+
+[hot_corners.bottom_right]
+action = "window_switcher"
+
+[lockscreen_widgets]
+enabled = false
+schema_version = 2
+widget_order = []
+
+[lockscreen_widgets.grid]
+cell_size = 16
+major_interval = 4
+visible = true
+
+
+[location]
+custom_schedule = false
+
+[nightlight]
+enabled = false
+temperature_day = 6500
+temperature_night = 5500
+
+[osd]
+background_opacity = 0.84999998100101948
+offset_y = 20
+position = "bottom_center"
+scale = 0.90000000596046448
+
+[osd.kinds]
+media = false
+nightlight = false
+
+[shell]
+font_family = "Noto Sans CJK SC"
+polkit_agent = true
+settings_show_advanced = true
+
+[shell.greeter_sync]
+auto_sync = true
+privilege_command = "pkexec"
+
+[shell.panel]
+control_center_placement = "floating"
+control_center_position = "top_right"
+session_placement = "floating"
+session_position = "center"
+transparency_mode = "soft"
+wallpaper_placement = "floating"
+wallpaper_position = "center"
+
+[[shell.session.actions]]
+action = "lock"
+countdown_seconds = 0.0
+enabled = true
+shortcut = "1"
+variant = "default"
+
+[[shell.session.actions]]
+action = "logout"
+countdown_seconds = 0.0
+enabled = true
+shortcut = "2"
+variant = "default"
+
+[[shell.session.actions]]
+action = "lock_and_suspend"
+countdown_seconds = 0.0
+enabled = true
+shortcut = "3"
+variant = "default"
+
+[[shell.session.actions]]
+action = "reboot"
+countdown_seconds = 0.0
+enabled = true
+shortcut = "4"
+variant = "default"
+
+[[shell.session.actions]]
+action = "shutdown"
+countdown_seconds = 0.0
+enabled = true
+shortcut = "5"
+variant = "destructive"
+
+[[shell.session.actions]]
+action = "command"
+command = "notify-send 'Noctalia' 'Custom session entry'"
+countdown_seconds = 0.0
+enabled = false
+variant = "default"
+
+[theme]
+builtin = "Ayu"
+community_palette = "One Dark Two"
+mode = "auto"
+source = "wallpaper"
+wallpaper_scheme = "m3-content"
+
+[theme.templates]
+builtin_ids = ["kitty", "qt", "starship"]
+community_ids = []
+
+# NyxMellow 动态 fcitx5 皮肤（mellow 形状 + Material You 自动取色）
+# 路径中的 /home/user 为占位符，由 nyxniri.deploy 在部署时替换为实际 $HOME
+[theme.templates.user.nyxmellow_theme]
+index = 0
+input_path = "/home/user/.local/share/fcitx5/themes/nyxmellow/templates/theme.conf"
+output_path = "/home/user/.local/share/fcitx5/themes/nyxmellow/theme.conf"
+
+[theme.templates.user.nyxmellow_panel]
+index = 1
+input_path = "/home/user/.local/share/fcitx5/themes/nyxmellow/templates/panel.svg"
+output_path = "/home/user/.local/share/fcitx5/themes/nyxmellow/panel.svg"
+
+[theme.templates.user.nyxmellow_highlight]
+index = 2
+input_path = "/home/user/.local/share/fcitx5/themes/nyxmellow/templates/highlight.svg"
+output_path = "/home/user/.local/share/fcitx5/themes/nyxmellow/highlight.svg"
+post_hook = "if pgrep -x fcitx5 >/dev/null 2>&1; then pkill -x fcitx5; sleep 1; fcitx5 -d >/dev/null 2>&1 & fi"
+
+[wallpaper]
+directory = "/home/user/图片/Wallpapers"
+fill_mode = "crop"
+
+
+[plugins]
+enabled = ["noctalia/mpvpaper"]
+
+[widget.active_window]
+min_length = 0
+
+[widget.clock]
+format = "{:%a, %d %b %H:%M}"
+
+[widget.tray]
+detached_panel = true
+drawer = true
+
+[widget."ray/echolyrics:echolyrics"]
+capsule = false
+
+[widget.mpvpaper]
+type = "noctalia/mpvpaper:mpvpaper"
+
+[plugin_settings."noctalia/mpvpaper"]
+mpv_options = "--config=no --load-scripts=no --script=~/.config/noctalia/mpv-hook.lua"
+picker_placement = "floating"
+video_directory = "/home/user/图片/Wallpapers/video"

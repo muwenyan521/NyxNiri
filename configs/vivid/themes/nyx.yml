@@ -1,0 +1,100 @@
+colors:
+  ink: "0a0f14"
+  text: "e6f1f4"
+  primary: "62d8e7"
+  secondary: "ff9f8e"
+  tertiary: "f2c66d"
+  muted: "78929b"
+  soft: "a9bdc4"
+
+core:
+  normal_text: {}
+  regular_file:
+    foreground: text
+  reset_to_normal: {}
+  directory:
+    foreground: primary
+  symlink:
+    foreground: soft
+  multi_hard_link: {}
+  fifo:
+    foreground: ink
+    background: tertiary
+  socket:
+    foreground: ink
+    background: secondary
+  door:
+    foreground: ink
+    background: secondary
+  block_device:
+    foreground: ink
+    background: tertiary
+  character_device:
+    foreground: ink
+    background: primary
+  broken_symlink:
+    foreground: ink
+    background: secondary
+  missing_symlink_target:
+    foreground: ink
+    background: secondary
+  setuid:
+    foreground: ink
+    background: secondary
+  setgid:
+    foreground: ink
+    background: tertiary
+  file_with_capability:
+    foreground: ink
+    background: primary
+  sticky_other_writable:
+    foreground: ink
+    background: tertiary
+  other_writable:
+    foreground: tertiary
+  sticky:
+    foreground: secondary
+  executable_file:
+    foreground: tertiary
+    font-style: bold
+
+text:
+  special:
+    foreground: ink
+    background: tertiary
+  todo:
+    font-style: bold
+  licenses:
+    foreground: muted
+  configuration:
+    foreground: primary
+  other:
+    foreground: soft
+
+markup:
+  foreground: primary
+
+programming:
+  source:
+    foreground: primary
+  tooling:
+    foreground: secondary
+  continuous-integration:
+    foreground: tertiary
+
+media:
+  foreground: secondary
+
+office:
+  foreground: tertiary
+
+archives:
+  foreground: tertiary
+  font-style: underline
+
+executable:
+  foreground: tertiary
+  font-style: bold
+
+unimportant:
+  foreground: muted

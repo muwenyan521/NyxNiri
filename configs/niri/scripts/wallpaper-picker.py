@@ -19,7 +19,7 @@ SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-from wallpaper_picker.lock import acquire_instance_lock, release_instance_lock
+from nyxui.runtime import acquire_instance_lock, release_instance_lock
 from wallpaper_picker.window import WallpaperPickerWindow
 
 RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/nyxniri-{os.getuid()}"

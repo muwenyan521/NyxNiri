@@ -1,0 +1,30 @@
+
+[[mgr.prepend_keymap]]
+on = "<Tab>"
+run = "spot"
+desc = "Preview focused file"
+
+[[mgr.prepend_keymap]]
+on = "Z"
+run = "plugin zoxide"
+desc = "Jump with zoxide"
+
+[[mgr.prepend_keymap]]
+on = "z"
+run = "plugin fzf"
+desc = "Find file or directory"
+
+[[mgr.prepend_keymap]]
+on = ["m", "s"]
+run = "linemode size"
+desc = "Show file sizes"
+
+[[mgr.prepend_keymap]]
+on = ["m", "p"]
+run = "linemode permissions"
+desc = "Show permissions"
+
+[[mgr.prepend_keymap]]
+on = ["m", "m"]
+run = "linemode mtime"
+desc = "Show modification time"

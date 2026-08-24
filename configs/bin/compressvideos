@@ -1,0 +1,641 @@
+#!/usr/bin/env bash
+# 描述： 压缩视频
+# Description: Compress Videos
+
+set -u
+
+# ==========================================
+# 多语言支持 (Bilingual Support)
+# ==========================================
+LANG_ID="en"
+if [[ "${LANG:-}" == *"zh_CN"* || "${LANGUAGE:-}" == *"zh_CN"* || "${LC_ALL:-}" == *"zh_CN"* || "${LC_MESSAGES:-}" == *"zh_CN"* ]]; then
+    LANG_ID="zh"
+fi
+
+# 在 tty 终端中通常不支持 CJK 字符，回退为英文
+if [[ "$(tty 2>/dev/null)" == /dev/tty[0-9]* ]] || [[ "${TERM:-}" == "linux" ]]; then
+    LANG_ID="en"
+fi
+
+if [ "$LANG_ID" = "zh" ]; then
+    L_AVAIL_CODECS="可用的视频编码格式 (基于设备 %s 自动检测):"
+    L_NVENC_DEV="  - nvidia (NVENC, 设备: %s)"
+    L_AMD_DEV="  - amdgpu (VAAPI, 设备: %s)"
+    L_INTEL_DEV="  - intel  (VAAPI, 设备: %s)"
+    L_CPU_DEV="  - cpu    (软件编码)"
+    L_AVAIL_DEVS="可用的硬件加速设备:"
+    L_OPT_NEED_FILE="选项 %s 需要提供文件路径。"
+    L_OPT_NEED_OUT="选项 %s 需要提供输出路径。"
+    L_OPT_NEED_QUAL="选项 %s 需要提供画质挡位 (1~10)。"
+    L_UNKNOWN_OPT="未知选项: %s"
+    L_NO_FFMPEG="未找到 ffmpeg，请先安装 ffmpeg 以检测和执行操作。"
+    L_NO_INPUT="未提供输入文件。"
+    L_COUNT_MISMATCH="错误: 输入文件数量 (%d) 与输出文件数量 (%d) 不匹配。"
+    L_UNSUPPORTED_DEV="不支持的硬件设备: %s"
+    L_QUAL_RANGE="画质参数必须是 1 到 10 之间的整数。"
+    L_INTERRUPT="进程被意外中断，清理残留的中间文件: %s"
+    L_AUDIO_ONLY="目标格式为音频 (%s)，仅提取/转换音频流..."
+    L_START_NVENC="启动 NVENC (%s) 硬件编解码 (画质等级: %s/10)..."
+    L_START_VAAPI="启动 VAAPI (%s) 硬件编解码 [设备: %s] (画质等级: %s/10)..."
+    L_START_CPU="启动 CPU (%s) 软件编解码 (画质等级: %s/10)..."
+    L_SKIP_FILE="跳过 '%s': 不是一个标准文件。"
+    L_PROCESSING="正在处理: %s -> %s"
+    L_AUDIO_OK="音频处理成功: %s"
+    L_AUDIO_FAIL="音频处理失败。"
+    L_NVENC_OK="Nvidia 硬件压缩成功: %s"
+    L_NVENC_FAIL="Nvidia 硬件压缩失败。"
+    L_NO_NV_DEV="未检测到 Nvidia 驱动/设备，无法使用 Nvidia 硬件加速。"
+    L_SKIP_NV="未检测到 Nvidia 设备，跳过 Nvidia 硬件加速。"
+    L_NV_UNSUPPORT="Nvidia NVENC 不支持编码格式: %s"
+    L_VAAPI_OK="VAAPI 硬件压缩成功: %s"
+    L_VAAPI_FAIL="VAAPI 硬件压缩失败。"
+    L_NO_VAAPI_DEV="未找到对应的 %s 硬件设备。"
+    L_SKIP_VAAPI="未检测到可用的 Intel/AMD 核心显卡，跳过 VAAPI。"
+    L_VAAPI_UNSUPPORT="VAAPI 不支持编码格式: %s"
+    L_CPU_OK="CPU 软件压缩成功: %s"
+    L_CPU_FAIL="CPU 软件压缩失败。"
+    L_CPU_UNSUPPORT="CPU 软件编码不支持格式: %s"
+    L_AUTO_FAIL="自动回退失败: 所有的可用硬件/软件设备均不支持编码格式 '%s'"
+    L_TASK_FAIL="任务失败: %s 无法被成功压缩。"
+    L_ALL_DONE="所有列队文件处理完毕。"
+    L_PAUSE="执行完毕后需按任意键退出..."
+else
+    L_AVAIL_CODECS="Available video codecs (auto-detected for device %s):"
+    L_NVENC_DEV="  - nvidia (NVENC, device: %s)"
+    L_AMD_DEV="  - amdgpu (VAAPI, device: %s)"
+    L_INTEL_DEV="  - intel  (VAAPI, device: %s)"
+    L_CPU_DEV="  - cpu    (software encoding)"
+    L_AVAIL_DEVS="Available hardware acceleration devices:"
+    L_OPT_NEED_FILE="Option %s requires a file path."
+    L_OPT_NEED_OUT="Option %s requires an output path."
+    L_OPT_NEED_QUAL="Option %s requires a quality level (1~10)."
+    L_UNKNOWN_OPT="Unknown option: %s"
+    L_NO_FFMPEG="ffmpeg not found. Please install ffmpeg first."
+    L_NO_INPUT="No input files provided."
+    L_COUNT_MISMATCH="Error: Input file count (%d) mismatches output file count (%d)."
+    L_UNSUPPORTED_DEV="Unsupported hardware device: %s"
+    L_QUAL_RANGE="Quality parameter must be an integer between 1 and 10."
+    L_INTERRUPT="Process unexpectedly interrupted, cleaning up residual file: %s"
+    L_AUDIO_ONLY="Target format is audio (%s), extracting/converting audio stream only..."
+    L_START_NVENC="Starting NVENC (%s) hardware encoding (Quality: %s/10)..."
+    L_START_VAAPI="Starting VAAPI (%s) hardware encoding [Device: %s] (Quality: %s/10)..."
+    L_START_CPU="Starting CPU (%s) software encoding (Quality: %s/10)..."
+    L_SKIP_FILE="Skipped '%s': Not a standard file."
+    L_PROCESSING="Processing: %s -> %s"
+    L_AUDIO_OK="Audio processing successful: %s"
+    L_AUDIO_FAIL="Audio processing failed."
+    L_NVENC_OK="Nvidia hardware compression successful: %s"
+    L_NVENC_FAIL="Nvidia hardware compression failed."
+    L_NO_NV_DEV="Nvidia driver/device not detected, cannot use Nvidia hardware acceleration."
+    L_SKIP_NV="Nvidia device not detected, skipping Nvidia hardware acceleration."
+    L_NV_UNSUPPORT="Nvidia NVENC does not support codec: %s"
+    L_VAAPI_OK="VAAPI hardware compression successful: %s"
+    L_VAAPI_FAIL="VAAPI hardware compression failed."
+    L_NO_VAAPI_DEV="Corresponding hardware device %s not found."
+    L_SKIP_VAAPI="Available Intel/AMD integrated graphics not detected, skipping VAAPI."
+    L_VAAPI_UNSUPPORT="VAAPI does not support codec: %s"
+    L_CPU_OK="CPU software compression successful: %s"
+    L_CPU_FAIL="CPU software compression failed."
+    L_CPU_UNSUPPORT="CPU software encoding does not support codec: %s"
+    L_AUTO_FAIL="Auto fallback failed: No available hardware/software devices support codec '%s'"
+    L_TASK_FAIL="Task failed: %s could not be successfully compressed."
+    L_ALL_DONE="All queued files processed."
+    L_PAUSE="Press any key to exit after execution..."
+fi
+
+# ==========================================
+# 默认配置 (可通过选项覆盖)
+# ==========================================
+DEFAULT_CODEC="h264"      # 默认编码格式
+DEFAULT_DEVICE="auto"     # 默认硬件设备
+DEFAULT_QUALITY=5         # 默认压缩画质
+
+# ==========================================
+# 变量初始化
+# ==========================================
+CODEC="$DEFAULT_CODEC"
+DEVICE="$DEFAULT_DEVICE"
+QUALITY="$DEFAULT_QUALITY"
+PAUSE_ON_EXIT=0
+CURRENT_OUT=""
+FILES=()
+OUT_FILES=()
+ACTION_LIST_DEVICES=0
+ACTION_LIST_CODECS=0
+
+# ==========================================
+# 颜色与日志配置
+# ==========================================
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_err()  { echo -e "${RED}[ERROR]${NC} $1" >&2; }
+log_ok()   { echo -e "${GREEN}[OK]${NC} $1"; }
+
+# ==========================================
+# 动态编解码器检测
+# ==========================================
+get_nvenc_codecs() {
+    ffmpeg -hide_banner -encoders 2>/dev/null | awk '/nvenc/ && /^ V/ {print $2}' | sed 's/_nvenc//' | sort
+}
+
+get_vaapi_codecs() {
+    ffmpeg -hide_banner -encoders 2>/dev/null | awk '/vaapi/ && /^ V/ {print $2}' | sed 's/_vaapi//' | sort
+}
+
+get_cpu_codecs() {
+    ffmpeg -hide_banner -encoders 2>/dev/null | grep -qw "libx264" && echo "h264"
+    ffmpeg -hide_banner -encoders 2>/dev/null | grep -qw "libx265" && echo "hevc"
+    ffmpeg -hide_banner -encoders 2>/dev/null | grep -qw "libvpx-vp9" && echo "vp9"
+    ffmpeg -hide_banner -encoders 2>/dev/null | grep -qE "libsvtav1|libaom-av1" && echo "av1"
+}
+
+is_codec_supported() {
+    local dev="$1"
+    local c="$2"
+    case "$dev" in
+        nvidia) get_nvenc_codecs | grep -qw "$c" ;;
+        amdgpu|intel) get_vaapi_codecs | grep -qw "$c" ;;
+        cpu) get_cpu_codecs | grep -qw "$c" ;;
+    esac
+}
+
+list_codecs() {
+    local target_dev="$1"
+    printf "$L_AVAIL_CODECS\n" "$target_dev"
+    
+    if [[ "$target_dev" == "auto" || "$target_dev" == "nvidia" ]]; then
+        local nv_codecs=$(get_nvenc_codecs)
+        if [ -n "$nv_codecs" ]; then
+            echo "  [Nvidia NVENC]"
+            for c in $nv_codecs; do
+                echo "    - $c"
+            done
+        fi
+    fi
+    
+    if [[ "$target_dev" == "auto" || "$target_dev" == "amdgpu" || "$target_dev" == "intel" ]]; then
+        local va_codecs=$(get_vaapi_codecs)
+        if [ -n "$va_codecs" ]; then
+            echo "  [VAAPI]"
+            for c in $va_codecs; do
+                echo "    - $c"
+            done
+        fi
+    fi
+    
+    if [[ "$target_dev" == "auto" || "$target_dev" == "cpu" ]]; then
+        local cpu_codecs=$(get_cpu_codecs)
+        if [ -n "$cpu_codecs" ]; then
+            echo "  [CPU]"
+            for c in $cpu_codecs; do
+                echo "    - $c"
+            done
+        fi
+    fi
+}
+
+list_accel_devices() {
+    echo "$L_AVAIL_DEVS"
+    local found=0
+    
+    for dev in /sys/class/drm/renderD*; do
+        [ -e "$dev/device/driver/module" ] || continue
+        driver=$(basename "$(readlink -f "$dev/device/driver/module")")
+        
+        if [[ "$driver" == "nvidia" || "$driver" == "nvidia_drm" ]]; then
+            printf "$L_NVENC_DEV\n" "/dev/dri/$(basename "$dev")"
+            found=1
+        elif [[ "$driver" == "amdgpu" || "$driver" == "radeon" ]]; then
+            printf "$L_AMD_DEV\n" "/dev/dri/$(basename "$dev")"
+            found=1
+        elif [[ "$driver" == "i915" || "$driver" == "xe" ]]; then
+            printf "$L_INTEL_DEV\n" "/dev/dri/$(basename "$dev")"
+            found=1
+        fi
+    done
+    
+    printf "$L_CPU_DEV\n"
+}
+
+# ==========================================
+# 帮助文档
+# ==========================================
+usage() {
+    if [ "$LANG_ID" = "zh" ]; then
+        cat <<USAGE
+用法: $(basename "$0") [选项] [文件...]
+
+视频批量压缩脚本，支持硬件编解码与自动回退检测。
+
+选项:
+  -i, --input <file>        指定输入文件路径
+  -o, --output <file>       指定输出文件路径。
+                            如果后缀名是 mp3, wav, m4a 等音频格式，则只输出音频。
+  -c, --codec [codec]       指定视频编码格式。默认: $DEFAULT_CODEC
+                            如果不提供参数，则列出当前可用编码格式。
+  -d, --accel-device [dev]  指定硬件加速设备。默认: $DEFAULT_DEVICE
+                            如果不提供参数，则列出当前可用硬件设备。
+  -q, --quality <1-10>      设置视频压缩画质 (1~10)。默认: $DEFAULT_QUALITY
+  -p, --pause               执行完毕后需按任意键退出
+  -h, --help                显示帮助信息
+
+示例:
+  1. 简单压缩单个文件:
+     $(basename "$0") video.mp4
+  2. 压缩并指定输出文件和画质:
+     $(basename "$0") -i input.mp4 -o output.mp4 -q 7
+  3. 使用 nvidia 硬件加速和 hevc 编码:
+     $(basename "$0") -d nvidia -c hevc video.mp4
+  4. 提取视频中的音频:
+     $(basename "$0") -i video.mp4 -o audio.mp3
+USAGE
+    else
+        cat <<USAGE
+Usage: $(basename "$0") [options] [files...]
+
+Batch video compression script supporting hardware encoding and auto-fallback.
+
+Options:
+  -i, --input <file>        Specify input file path
+  -o, --output <file>       Specify output file path.
+                            If extension is mp3, wav, m4a, etc., it outputs audio only.
+  -c, --codec [codec]       Specify video codec. Default: $DEFAULT_CODEC
+                            If no argument is provided, lists available codecs.
+  -d, --accel-device [dev]  Specify hardware acceleration device. Default: $DEFAULT_DEVICE
+                            If no argument is provided, lists available devices.
+  -q, --quality <1-10>      Set video compression quality (1~10). Default: $DEFAULT_QUALITY
+  -p, --pause               Press any key to exit after execution
+  -h, --help                Show help information
+
+Examples:
+  1. Simple single file compression:
+     $(basename "$0") video.mp4
+  2. Compress with specified output and quality:
+     $(basename "$0") -i input.mp4 -o output.mp4 -q 7
+  3. Use nvidia hardware acceleration and hevc codec:
+     $(basename "$0") -d nvidia -c hevc video.mp4
+  4. Extract audio from video:
+     $(basename "$0") -i video.mp4 -o audio.mp3
+USAGE
+    fi
+}
+
+# ==========================================
+# 参数解析
+# ==========================================
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -d|--accel-device|-ad)
+            if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
+                DEVICE="$2"
+                shift 2
+            else
+                ACTION_LIST_DEVICES=1
+                shift 1
+            fi
+            ;;
+        -c|--codec|-e|--encoder)
+            if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
+                CODEC="$2"
+                shift 2
+            else
+                ACTION_LIST_CODECS=1
+                shift 1
+            fi
+            ;;
+        -i|--input)
+            if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
+                FILES+=("$2")
+                shift 2
+            else
+                log_err "$(printf "$L_OPT_NEED_FILE" "$1")"
+                exit 1
+            fi
+            ;;
+        -o|--output)
+            if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
+                OUT_FILES+=("$2")
+                shift 2
+            else
+                log_err "$(printf "$L_OPT_NEED_OUT" "$1")"
+                exit 1
+            fi
+            ;;
+        -q|--quality)
+            if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
+                QUALITY="$2"
+                shift 2
+            else
+                log_err "$(printf "$L_OPT_NEED_QUAL" "$1")"
+                exit 1
+            fi
+            ;;
+        -p|--pause)
+            PAUSE_ON_EXIT=1
+            shift 1
+            ;;
+        -*)
+            log_err "$(printf "$L_UNKNOWN_OPT" "$1")"
+            usage
+            exit 1
+            ;;
+        *)
+            FILES+=("$1")
+            shift 1
+            ;;
+    esac
+done
+
+if ! command -v ffmpeg >/dev/null 2>&1; then
+    log_err "$L_NO_FFMPEG"
+    exit 1
+fi
+
+# 处理仅列表操作
+if [ "$ACTION_LIST_DEVICES" -eq 1 ]; then
+    list_accel_devices
+    exit 0
+fi
+
+if [ "$ACTION_LIST_CODECS" -eq 1 ]; then
+    list_codecs "$DEVICE"
+    exit 0
+fi
+
+if [ "${#FILES[@]}" -eq 0 ]; then
+    log_err "$L_NO_INPUT"
+    usage
+    exit 1
+fi
+
+if [[ ${#OUT_FILES[@]} -gt 0 && ${#FILES[@]} -ne ${#OUT_FILES[@]} ]]; then
+    log_err "$(printf "$L_COUNT_MISMATCH" "${#FILES[@]}" "${#OUT_FILES[@]}")"
+    exit 1
+fi
+
+case "$DEVICE" in
+    auto|nvidia|amdgpu|intel|cpu) ;;
+    *) log_err "$(printf "$L_UNSUPPORTED_DEV" "$DEVICE")"; exit 1 ;;
+esac
+
+if ! [[ "$QUALITY" =~ ^([1-9]|10)$ ]]; then
+    log_err "$L_QUAL_RANGE"
+    exit 1
+fi
+
+# ==========================================
+# 辅助函数
+# ==========================================
+
+get_crf_value() {
+    case "$1" in
+        1) echo 38 ;;
+        2) echo 35 ;;
+        3) echo 32 ;;
+        4) echo 29 ;;
+        5) echo 26 ;;
+        6) echo 23 ;;
+        7) echo 20 ;;
+        8) echo 17 ;;
+        9) echo 14 ;;
+        10) echo 11 ;;
+        *) echo 26 ;;
+    esac
+}
+
+get_drm_device() {
+    local target_driver="$1"
+    for dev in /sys/class/drm/renderD*; do
+        [ -e "$dev/device/driver/module" ] || continue
+        driver=$(basename "$(readlink -f "$dev/device/driver/module")")
+        
+        if [ "$target_driver" = "auto" ] || [ "$target_driver" = "intel" ]; then
+            if [[ "$driver" == "i915" || "$driver" == "xe" ]]; then
+                echo "/dev/dri/$(basename "$dev")"
+                return
+            fi
+        fi
+        
+        if [ "$target_driver" = "auto" ] || [ "$target_driver" = "amdgpu" ]; then
+            if [[ "$driver" == "amdgpu" || "$driver" == "radeon" ]]; then
+                echo "/dev/dri/$(basename "$dev")"
+                return
+            fi
+        fi
+    done
+}
+
+is_audio_only() {
+    local ext="${1##*.}"
+    ext="${ext,,}"
+    case "$ext" in
+        mp3|wav|m4a|flac|aac|ogg|wma|opus) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# ==========================================
+# 信号捕获
+# ==========================================
+cleanup() {
+    if [ -n "$CURRENT_OUT" ] && [ -f "$CURRENT_OUT" ]; then
+        log_warn "$(printf "$L_INTERRUPT" "$CURRENT_OUT")"
+        rm -f "$CURRENT_OUT"
+    fi
+}
+trap 'cleanup; exit 130' SIGINT SIGTERM SIGHUP SIGQUIT
+trap cleanup EXIT
+
+# ==========================================
+# 编码器执行函数
+# ==========================================
+run_audio_only() {
+    local in="$1" out="$2"
+    log_info "$(printf "$L_AUDIO_ONLY" "${out##*.}")"
+    if ffmpeg -y -i "$in" -vn "$out" </dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+run_nvenc() {
+    local in="$1" out="$2"
+    local vcodec="${CODEC}_nvenc"
+    local crf_val=$(get_crf_value "$QUALITY")
+    
+    log_info "$(printf "$L_START_NVENC" "$CODEC" "$QUALITY")"
+    ffmpeg -y -hwaccel cuda -i "$in" \
+        -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" \
+        -c:v "$vcodec" -preset p4 -cq "$crf_val" -c:a aac -b:a 128k -pix_fmt yuv420p "$out" </dev/null
+}
+
+run_vaapi() {
+    local in="$1" out="$2" dev="$3"
+    local vcodec="${CODEC}_vaapi"
+    local crf_val=$(get_crf_value "$QUALITY")
+    
+    log_info "$(printf "$L_START_VAAPI" "$CODEC" "$dev" "$QUALITY")"
+    ffmpeg -y -hwaccel vaapi -hwaccel_device "$dev" -hwaccel_output_format vaapi -i "$in" \
+        -vf "scale_vaapi=w=trunc(iw/2)*2:h=trunc(ih/2)*2" \
+        -c:v "$vcodec" -qp "$crf_val" -c:a aac -b:a 128k "$out" </dev/null
+}
+
+run_cpu() {
+    local in="$1" out="$2"
+    local vcodec="libx264"
+    case "$CODEC" in
+        h264) vcodec="libx264" ;;
+        hevc) vcodec="libx265" ;;
+        vp9) vcodec="libvpx-vp9" ;;
+        av1) 
+            if ffmpeg -hide_banner -encoders 2>/dev/null | grep -qw "libsvtav1"; then
+                vcodec="libsvtav1"
+            else
+                vcodec="libaom-av1"
+            fi
+            ;;
+        *) vcodec="$CODEC" ;;
+    esac
+    local crf_val=$(get_crf_value "$QUALITY")
+    
+    log_info "$(printf "$L_START_CPU" "$CODEC" "$QUALITY")"
+    ffmpeg -y -i "$in" \
+        -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" \
+        -c:v "$vcodec" -crf "$crf_val" -preset fast -c:a aac -b:a 128k -pix_fmt yuv420p "$out" </dev/null
+}
+
+# ==========================================
+# 主处理循环
+# ==========================================
+for i in "${!FILES[@]}"; do
+    f="${FILES[$i]}"
+    
+    if [ ! -f "$f" ]; then
+        log_warn "$(printf "$L_SKIP_FILE" "$f")"
+        continue
+    fi
+
+    if [ ${#OUT_FILES[@]} -gt 0 ]; then
+        CURRENT_OUT="${OUT_FILES[$i]}"
+        # 自动补全后缀名逻辑
+        if [[ "$(basename "$CURRENT_OUT")" != *.* ]]; then
+            CURRENT_OUT="${CURRENT_OUT}.mp4"
+        fi
+    else
+        CURRENT_OUT="${f%.*}_compressed.mp4"
+    fi
+
+    echo "---------------------------------------------------"
+    log_info "$(printf "$L_PROCESSING" "$(basename "$f")" "$(basename "$CURRENT_OUT")")"
+    
+    success=0
+
+    # 0. 仅提取音频逻辑
+    if is_audio_only "$CURRENT_OUT"; then
+        if run_audio_only "$f" "$CURRENT_OUT"; then
+            log_ok "$(printf "$L_AUDIO_OK" "$(basename "$CURRENT_OUT")")"
+        else
+            log_err "$L_AUDIO_FAIL"
+            [ -f "$CURRENT_OUT" ] && rm -f "$CURRENT_OUT"
+        fi
+        continue
+    fi
+
+    # 1. 尝试 NVENC
+    if [ "$DEVICE" = "auto" ] || [ "$DEVICE" = "nvidia" ]; then
+        if is_codec_supported "nvidia" "$CODEC"; then
+            if command -v nvidia-smi >/dev/null 2>&1 || ls /dev/nvidia* >/dev/null 2>&1; then
+                if run_nvenc "$f" "$CURRENT_OUT"; then
+                    log_ok "$(printf "$L_NVENC_OK" "$(basename "$CURRENT_OUT")")"
+                    success=1
+                else
+                    log_warn "$L_NVENC_FAIL"
+                    [ -f "$CURRENT_OUT" ] && rm -f "$CURRENT_OUT"
+                fi
+            else
+                if [ "$DEVICE" = "nvidia" ]; then
+                    log_err "$L_NO_NV_DEV"
+                else
+                    log_info "$L_SKIP_NV"
+                fi
+            fi
+        else
+            if [ "$DEVICE" = "nvidia" ]; then
+                log_err "$(printf "$L_NV_UNSUPPORT" "$CODEC")"
+            fi
+        fi
+    fi
+
+    # 2. 尝试 VAAPI
+    if [ $success -eq 0 ] && { [ "$DEVICE" = "auto" ] || [ "$DEVICE" = "intel" ] || [ "$DEVICE" = "amdgpu" ]; }; then
+        if is_codec_supported "intel" "$CODEC"; then
+            actual_vaapi_dev=$(get_drm_device "$DEVICE")
+            
+            if [ -n "$actual_vaapi_dev" ] && [ -e "$actual_vaapi_dev" ]; then
+                if run_vaapi "$f" "$CURRENT_OUT" "$actual_vaapi_dev"; then
+                    log_ok "$(printf "$L_VAAPI_OK" "$(basename "$CURRENT_OUT")")"
+                    success=1
+                else
+                    log_warn "$L_VAAPI_FAIL"
+                    [ -f "$CURRENT_OUT" ] && rm -f "$CURRENT_OUT"
+                fi
+            else
+                if [ "$DEVICE" != "auto" ]; then
+                    log_err "$(printf "$L_NO_VAAPI_DEV" "$DEVICE")"
+                else
+                    log_info "$L_SKIP_VAAPI"
+                fi
+            fi
+        else
+            if [ "$DEVICE" = "intel" ] || [ "$DEVICE" = "amdgpu" ]; then
+                log_err "$(printf "$L_VAAPI_UNSUPPORT" "$CODEC")"
+            fi
+        fi
+    fi
+
+    # 3. 尝试 CPU
+    if [ $success -eq 0 ] && { [ "$DEVICE" = "auto" ] || [ "$DEVICE" = "cpu" ]; }; then
+        if is_codec_supported "cpu" "$CODEC"; then
+            if run_cpu "$f" "$CURRENT_OUT"; then
+                log_ok "$(printf "$L_CPU_OK" "$(basename "$CURRENT_OUT")")"
+                success=1
+            else
+                log_err "$L_CPU_FAIL"
+                [ -f "$CURRENT_OUT" ] && rm -f "$CURRENT_OUT"
+            fi
+        else
+            if [ "$DEVICE" = "cpu" ]; then
+                log_err "$(printf "$L_CPU_UNSUPPORT" "$CODEC")"
+            elif [ "$DEVICE" = "auto" ]; then
+                log_err "$(printf "$L_AUTO_FAIL" "$CODEC")"
+            fi
+        fi
+    fi
+
+    if [ $success -eq 0 ]; then
+        log_err "$(printf "$L_TASK_FAIL" "$(basename "$f")")"
+    fi
+done
+
+CURRENT_OUT=""
+echo "---------------------------------------------------"
+log_ok "$L_ALL_DONE"
+
+# ==========================================
+# 退出暂停逻辑
+# ==========================================
+if [ "$PAUSE_ON_EXIT" -eq 1 ]; then
+    read -n 1 -s -r -p "$L_PAUSE"
+    echo ""
+fi

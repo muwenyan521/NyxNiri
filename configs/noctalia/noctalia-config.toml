@@ -125,8 +125,16 @@ position = "bottom_center"
 scale = 0.90000000596046448
 
 [osd.kinds]
+volume = true
+volume_output = true
+volume_input = false
+brightness = true
+power_profile = true
+privacy = true
 media = false
 nightlight = false
+keyboard_layout = false
+wifi = false
 
 [shell]
 font_family = "Noto Sans CJK SC"

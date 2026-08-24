@@ -20,6 +20,7 @@ from nyxniri.core import (
     log_msg,
 )
 from nyxniri.deploy import (
+    config_destination,
     deploy_selected_configs,
     deploy_wallpapers,
     discover_config_items,
@@ -317,7 +318,7 @@ def offer_overwrite_upgrade(flag: str = "") -> bool:
         diff_cmds = []
         for it in config_items:
             src = env.configs_src / it
-            dest = env.config_dir / it
+            dest = config_destination(it)
             if src.exists() and dest.exists():
                 diff_cmds.append(f"diff -urN --color=always '{dest}' '{src}'")
         if diff_cmds:

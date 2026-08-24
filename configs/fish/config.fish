@@ -38,6 +38,21 @@ end
 
 # 查看代理状态
 function proxy_status
+    set -l check_network false
+    if test (count $argv) -gt 0
+        switch $argv[1]
+            case --check check
+                set check_network true
+            case --help -h
+                echo "用法: proxy_status [--check]"
+                echo "默认只显示代理变量；--check 才进行网络探测。"
+                return 0
+            case '*'
+                echo "用法: proxy_status [--check]" >&2
+                return 2
+        end
+    end
+
     echo "--- 代理环境变量 (Proxy Env) ---"
     for var in http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY
         if set -q $var
@@ -45,6 +60,12 @@ function proxy_status
         else
             echo "$var: [未设置]"
         end
+    end
+
+    if not $check_network
+        echo ""
+        echo "提示: proxy_status --check 执行网络探测"
+        return 0
     end
 
     echo ""
@@ -117,7 +138,8 @@ function nyxhelp --description "NyxNiri Cheatsheet速查手册"
             set_color -o magenta; echo "  网络代理控制"; set_color normal
             set_color -o yellow; echo -n "    proxy_on [端口/地址]     "; set_color green; echo "-> 开启代理 (默认 127.0.0.1:7890，Starship 实时显示)"; set_color normal
             set_color -o yellow; echo -n "    proxy_off                "; set_color green; echo "-> 关闭代理 (清除环境变量与 Prompt 标识)"; set_color normal
-            set_color -o yellow; echo -n "    proxy_status             "; set_color green; echo "-> 检查代理连通性、延迟与公网 IP"; set_color normal
+            set_color -o yellow; echo -n "    proxy_status             "; set_color green; echo "-> 查看代理变量与端点"; set_color normal
+            set_color -o yellow; echo -n "    proxy_status --check     "; set_color green; echo "-> 显式执行连通性与公网 IP 探测"; set_color normal
             return
         case pkg
             set_color -o magenta; echo "  包管理与清理"; set_color normal
@@ -130,21 +152,23 @@ function nyxhelp --description "NyxNiri Cheatsheet速查手册"
         case keys bind keybindings
             set_color -o magenta; echo "  Niri 桌面核心快捷键"; set_color normal
             set_color -o blue; echo -n "    Mod + Return             "; set_color green; echo "-> 启动 Kitty 终端"; set_color normal
-            set_color -o blue; echo -n "    Mod + R / Mod + E        "; set_color green; echo "-> 启动 Noctalia Launcher / Nautilus"; set_color normal
-            set_color -o blue; echo -n "    Mod + Q / Mod+Shift+Q    "; set_color green; echo "-> 关闭当前窗口 / 退出桌面会话"; set_color normal
-            set_color -o blue; echo -n "    Mod + Tab                "; set_color green; echo "-> 切换工作区概览 (Overview)"; set_color normal
+            set_color -o blue; echo -n "    Mod + T / Mod + Slash    "; set_color green; echo "-> Kitty 终端 / Scratchpad 快速终端"; set_color normal
+            set_color -o blue; echo -n "    Mod + Z / Mod + F2       "; set_color green; echo "-> Orbit / Noctalia 设置"; set_color normal
+            set_color -o blue; echo -n "    Mod + B / Mod + E        "; set_color green; echo "-> 浏览器 / Yazi 文件管理器"; set_color normal
+            set_color -o blue; echo -n "    Mod + Q / Mod+Shift+E    "; set_color green; echo "-> 关闭当前窗口 / 退出桌面会话"; set_color normal
+            set_color -o blue; echo -n "    Mod + Tab / Mod + O/G    "; set_color green; echo "-> 切换工作区概览 (Overview)"; set_color normal
             set_color -o blue; echo -n "    Mod + Space              "; set_color green; echo "-> 切换预设列宽比例"; set_color normal
-            set_color -o blue; echo -n "    Mod + T / Shift+T        "; set_color green; echo "-> 切换浮动平铺 / 浮动层焦点穿透"; set_color normal
-            set_color -o blue; echo -n "    Mod + G                  "; set_color green; echo "-> 切换标签页列模式 (Tabbed Group)"; set_color normal
+            set_color -o blue; echo -n "    Mod + V / Shift+V        "; set_color green; echo "-> 切换浮动平铺 / 浮动层焦点穿透"; set_color normal
+            set_color -o blue; echo -n "    Mod + X / Shift+X        "; set_color green; echo "-> 切换标签页列模式 (Tabbed Group)"; set_color normal
             set_color -o blue; echo -n "    Mod + F / Shift+F        "; set_color green; echo "-> 最大化列宽 / 全屏窗口"; set_color normal
-            set_color -o blue; echo -n "    Mod + W / Ctrl+W         "; set_color green; echo "-> 壁纸选择器 (静态+动态) / 随机换壁纸"; set_color normal
-            set_color -o blue; echo -n "    Mod + N                  "; set_color green; echo "-> 切换护眼暖色温模式"; set_color normal
+            set_color -o blue; echo -n "    Mod + W / Alt+W          "; set_color green; echo "-> 聚焦上方窗口 / 壁纸选择器"; set_color normal
+            set_color -o blue; echo -n "    Mod + N / Shift+N        "; set_color green; echo "-> 浮动层焦点 / 护眼暖色温模式"; set_color normal
             set_color -o blue; echo -n "    Mod + ~                  "; set_color green; echo "-> 切换 Kitty Scratchpad 浮动终端"; set_color normal
-            set_color -o blue; echo -n "    Mod + A / Mod + 鼠标前侧键 "; set_color green; echo "-> 呼出 Orbit 矢量星环启动器"; set_color normal
-            set_color -o blue; echo -n "    Mod + L                  "; set_color green; echo "-> 锁定屏幕 (Noctalia Lock)"; set_color normal
+            set_color -o blue; echo -n "    Mod + Alt+Z / 鼠标前侧键 "; set_color green; echo "-> 呼出 Orbit 矢量星环启动器"; set_color normal
+            set_color -o blue; echo -n "    Mod + Alt+L              "; set_color green; echo "-> 锁定屏幕 (Noctalia Lock)"; set_color normal
             set_color -o blue; echo -n "    Mod + Shift + S / Print  "; set_color green; echo "-> 交互式区域截图"; set_color normal
-            set_color -o blue; echo -n "    Mod + Shift + R          "; set_color green; echo "-> 重载 Niri 桌面配置"; set_color normal
-            set_color -o blue; echo -n "    Mod + Slash (/)          "; set_color green; echo "-> 显示 Niri 原生按键覆盖层"; set_color normal
+            set_color -o blue; echo -n "    Mod + Ctrl+Shift+R       "; set_color green; echo "-> 重载 Niri 桌面配置"; set_color normal
+            set_color -o blue; echo -n "    Mod + Shift+Slash        "; set_color green; echo "-> 显示 Niri 原生按键覆盖层"; set_color normal
             return
         case shell
             set_color -o magenta; echo "  终端补全与 fzf"; set_color normal
@@ -153,11 +177,20 @@ function nyxhelp --description "NyxNiri Cheatsheet速查手册"
             set_color -o blue; echo -n "    Ctrl + Alt + F           "; set_color green; echo "-> fzf 模糊查找文件"; set_color normal
             set_color -o blue; echo -n "    Ctrl + Alt + L / S       "; set_color green; echo "-> fzf 浏览 Git Log / Status"; set_color normal
             return
+        case tools
+            set_color -o magenta; echo "  NyxNiri 工具入口"; set_color normal
+            set_color -o blue; echo -n "    fm / y                   "; set_color green; echo "-> Yazi 文件管理器并回写退出目录"; set_color normal
+            set_color -o blue; echo -n "    sys                      "; set_color green; echo "-> btop 系统资源监视器"; set_color normal
+            set_color -o blue; echo -n "    proc                     "; set_color green; echo "-> procs 进程列表 (存在时)"; set_color normal
+            set_color -o blue; echo -n "    disk                     "; set_color green; echo "-> duf 磁盘挂载表 (缺失时回退 df)"; set_color normal
+            set_color -o blue; echo -n "    largest                  "; set_color green; echo "-> dust 大目录分析 (缺失时回退 du)"; set_color normal
+            set_color -o blue; echo -n "    gdiff                    "; set_color green; echo "-> delta Git 差异 (缺失时回退 git diff)"; set_color normal
+            return
     end
 
     if test -n "$section"
         nyxhelp header
-        for sec in cli proxy pkg keys shell
+        for sec in cli proxy pkg keys shell tools
             nyxhelp --section $sec
             echo ""
         end
@@ -172,7 +205,8 @@ function nyxhelp --description "NyxNiri Cheatsheet速查手册"
             "3. pkg    包管理与缓存清理 (Shelly)" \
             "4. keys   Niri 桌面核心快捷键" \
             "5. shell  终端自动补全与 fzf 导航" \
-            "6. all    显示全量手册 (Full Cheatsheet)"
+            "6. tools  NyxNiri 工具入口" \
+            "7. all    显示全量手册 (Full Cheatsheet)"
 
         set -l selection (printf '%s\n' $choices | fzf \
             --prompt="nyxhelp > " \
@@ -435,8 +469,88 @@ if status is-interactive
     if command -v eza &>/dev/null
         if test "$TERM" != "linux"
             alias ls 'eza --icons=auto'
+            alias l 'eza --icons=auto --group-directories-first'
+            alias ll 'eza -lah --icons=auto --group-directories-first --git'
+            alias la 'eza -a --icons=auto --group-directories-first'
+            alias lt 'eza --tree --level=2 --icons=auto --group-directories-first'
         else
             alias ls 'eza'
+            alias l 'eza --group-directories-first'
+            alias ll 'eza -lah --group-directories-first --git'
+            alias la 'eza -a --group-directories-first'
+            alias lt 'eza --tree --level=2 --group-directories-first'
         end
+    end
+
+    # Directory navigation: keep native cd semantics and add frequency-based helpers.
+    if command -v zoxide &>/dev/null
+        zoxide init fish | source
+    end
+
+    # Yazi directory hand-off. The wrapper stays opt-in at runtime and is absent when yazi is missing.
+    if command -v yazi &>/dev/null
+        function y --description "Open Yazi and return to its last directory"
+            set -l cwd_file (mktemp -t nyxniri-yazi-cwd.XXXXXX)
+            yazi --cwd-file="$cwd_file" $argv
+            if test -r "$cwd_file"
+                set -l cwd (string collect < "$cwd_file")
+                if test -n "$cwd" -a -d "$cwd" -a "$cwd" != "$PWD"
+                    cd -- "$cwd"
+                end
+            end
+            rm -f -- "$cwd_file"
+        end
+        function fm --description "Open the NyxNiri terminal file manager"
+            y $argv
+        end
+    end
+
+    # Explicit visual replacements for common inspection commands. Native commands remain untouched.
+    if command -v btop &>/dev/null
+        function sys --description "Open the NyxNiri system monitor"
+            btop $argv
+        end
+    end
+    if command -v procs &>/dev/null
+        function proc --description "Show a readable process list"
+            procs $argv
+        end
+    end
+    if command -v duf &>/dev/null
+        function disk --description "Show mounted disks in a readable table"
+            duf $argv
+        end
+    else
+        function disk --description "Show mounted disks"
+            df -h $argv
+        end
+    end
+    if command -v dust &>/dev/null
+        function largest --description "Find the largest entries in a directory"
+            dust $argv
+        end
+    else
+        function largest --description "Find the largest entries in a directory"
+            du -h --max-depth=1 $argv | sort -h
+        end
+    end
+    if command -v bat &>/dev/null
+        function bathelp --description "Read command help with syntax highlighting"
+            command $argv[1] --help 2>&1 | bat --language=help --style=plain --paging=never
+        end
+    end
+    if command -v delta &>/dev/null
+        function gdiff --description "View a readable Git diff"
+            git diff --color=always $argv | delta
+        end
+    else
+        function gdiff --description "View a Git diff"
+            git diff $argv
+        end
+    end
+
+    # Vivid is optional; use the Nyx file palette only when the generator and theme exist.
+    if command -v vivid &>/dev/null; and test -f "$HOME/.config/vivid/themes/nyx.yml"
+        set -gx LS_COLORS (vivid generate "$HOME/.config/vivid/themes/nyx.yml")
     end
 end

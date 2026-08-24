@@ -59,5 +59,53 @@
     "mode": "system",
     "light": "One Light",
     "dark": "VSCode Dark Modern"
+  },
+  "theme_overrides": {
+    "VSCode Dark Modern": {
+      "editor.background": "#0a0f14",
+      "editor.foreground": "#e6f1f4",
+      "editor.gutter.background": "#0a0f14",
+      "editor.active_line.background": "#111820",
+      "editor.selection.background": "#24313b",
+      "editor.line_number": "#78929b",
+      "editor.active_line_number": "#62d8e7",
+      "editor.accent": "#62d8e7",
+      "editor.border": "#78929b",
+      "panel.background": "#111820",
+      "panel.focused_border": "#62d8e7",
+      "terminal.background": "#0a0f14",
+      "terminal.foreground": "#e6f1f4",
+      "terminal.ansi.black": "#0a0f14",
+      "terminal.ansi.red": "#ff9f8e",
+      "terminal.ansi.green": "#7fe7f3",
+      "terminal.ansi.yellow": "#f2c66d",
+      "terminal.ansi.blue": "#62d8e7",
+      "terminal.ansi.magenta": "#ffb3a5",
+      "terminal.ansi.cyan": "#a9bdc4",
+      "terminal.ansi.white": "#e6f1f4"
+    },
+    "One Light": {
+      "editor.background": "#f4f8f9",
+      "editor.foreground": "#172023",
+      "editor.gutter.background": "#f4f8f9",
+      "editor.active_line.background": "#dce7e9",
+      "editor.selection.background": "#c5e7eb",
+      "editor.line_number": "#6f7d80",
+      "editor.active_line_number": "#006875",
+      "editor.accent": "#006875",
+      "editor.border": "#6f7d80",
+      "panel.background": "#ffffff",
+      "panel.focused_border": "#006875",
+      "terminal.background": "#f4f8f9",
+      "terminal.foreground": "#172023",
+      "terminal.ansi.black": "#172023",
+      "terminal.ansi.red": "#9b3f33",
+      "terminal.ansi.green": "#2d756f",
+      "terminal.ansi.yellow": "#765a00",
+      "terminal.ansi.blue": "#006875",
+      "terminal.ansi.magenta": "#8b4f75",
+      "terminal.ansi.cyan": "#3f6f75",
+      "terminal.ansi.white": "#ffffff"
+    }
   }
 }

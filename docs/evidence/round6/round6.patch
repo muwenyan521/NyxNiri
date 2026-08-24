@@ -1,0 +1,482 @@
+--- docs/evidence/round6/originals/configs/niri/config.kdl	2026-08-23 20:25:20.406347586 +0800
++++ configs/niri/config.kdl	2026-08-24 21:07:45.686250947 +0800
+@@ -10,6 +10,7 @@
+ include "animations.kdl"
+ // 引入窗口与图层规则
+ include "rules.kdl"
++include optional=true "rules_optional.kdl"
+ // 引入快捷键绑定配置
+ include "binds.kdl"
+ 
+--- docs/evidence/round6/originals/configs/noctalia/noctalia-config.toml	2026-08-23 19:57:27.028830286 +0800
++++ configs/noctalia/noctalia-config.toml	2026-08-24 21:07:45.687250941 +0800
+@@ -125,8 +125,16 @@
+ scale = 0.90000000596046448
+ 
+ [osd.kinds]
++volume = true
++volume_output = true
++volume_input = false
++brightness = true
++power_profile = true
++privacy = true
+ media = false
+ nightlight = false
++keyboard_layout = false
++wifi = false
+ 
+ [shell]
+ font_family = "Noto Sans CJK SC"
+--- docs/evidence/round6/originals/configs/fish/config.fish	2026-08-24 20:29:08.916611348 +0800
++++ configs/fish/config.fish	2026-08-24 21:08:33.484973201 +0800
+@@ -38,6 +38,21 @@
+ 
+ # 查看代理状态
+ function proxy_status
++    set -l check_network false
++    if test (count $argv) -gt 0
++        switch $argv[1]
++            case --check check
++                set check_network true
++            case --help -h
++                echo "用法: proxy_status [--check]"
++                echo "默认只显示代理变量；--check 才进行网络探测。"
++                return 0
++            case '*'
++                echo "用法: proxy_status [--check]" >&2
++                return 2
++        end
++    end
++
+     echo "--- 代理环境变量 (Proxy Env) ---"
+     for var in http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY
+         if set -q $var
+@@ -47,6 +62,12 @@
+         end
+     end
+ 
++    if not $check_network
++        echo ""
++        echo "提示: proxy_status --check 执行网络探测"
++        return 0
++    end
++
+     echo ""
+     echo "--- 连通性测试 (Connectivity) ---"
+     echo -n "测试 Google.com... "
+@@ -117,7 +138,8 @@
+             set_color -o magenta; echo "  网络代理控制"; set_color normal
+             set_color -o yellow; echo -n "    proxy_on [端口/地址]     "; set_color green; echo "-> 开启代理 (默认 127.0.0.1:7890，Starship 实时显示)"; set_color normal
+             set_color -o yellow; echo -n "    proxy_off                "; set_color green; echo "-> 关闭代理 (清除环境变量与 Prompt 标识)"; set_color normal
+-            set_color -o yellow; echo -n "    proxy_status             "; set_color green; echo "-> 检查代理连通性、延迟与公网 IP"; set_color normal
++            set_color -o yellow; echo -n "    proxy_status             "; set_color green; echo "-> 查看代理变量与端点"; set_color normal
++            set_color -o yellow; echo -n "    proxy_status --check     "; set_color green; echo "-> 显式执行连通性与公网 IP 探测"; set_color normal
+             return
+         case pkg
+             set_color -o magenta; echo "  包管理与清理"; set_color normal
+--- docs/evidence/round6/originals/configs/starship.toml	2026-08-23 22:12:45.302632949 +0800
++++ configs/starship.toml	2026-08-24 21:08:33.485973195 +0800
+@@ -1,4 +1,5 @@
+ palette = "noctalia"
++scan_timeout = 120
+ 
+ # Format Layout (Pawlette Standard Order: Who -> Where -> Git Context -> Proxy)
+ format = """\
+@@ -84,7 +85,20 @@
+ symbol = " "
+ 
+ [git_status]
+-disabled = true
++disabled = false
++format = "([$all_status$ahead_behind]($style) )"
++style = "bold fg:yellow"
++conflicted = "!"
++ahead = "⇡${count}"
++behind = "⇣${count}"
++diverged = "⇕${ahead_count}${behind_count}"
++up_to_date = ""
++untracked = "?"
++modified = "!"
++staged = "+"
++renamed = "»"
++deleted = "✘"
++stashed = "≡"
+ 
+ [docker_context]
+ disabled = false
+--- docs/evidence/round6/originals/configs/fastfetch/config.jsonc	2026-08-23 22:10:27.299979209 +0800
++++ configs/fastfetch/config.jsonc	2026-08-24 21:08:33.486973190 +0800
+@@ -14,9 +14,11 @@
+     },
+     "display": {
+         "separator": "    ",
++        "disableLinewrap": true,
+         "color": {
+             "keys": "cyan",
+-            "title": "white"
++            "title": "white",
++            "output": "white"
+         }
+     },
+     "modules": [
+--- docs/evidence/round6/originals/configs/kitty/kitty.conf	2026-08-23 19:57:27.026751864 +0800
++++ configs/kitty/kitty.conf	2026-08-24 21:12:33.932576032 +0800
+@@ -9,6 +9,8 @@
+ cursor_trail 1 
+ cursor_shape block
+ shell_integration no-cursor
++scrollback_lines 10000
++scrollback_pager less --chop-long-lines --RAW-CONTROL-CHARS +INPUT_LINE_NUMBER
+ 
+ # BEGIN_KITTY_THEME
+ # Noctalia
+@@ -38,6 +40,8 @@
+ mouse_map ctrl+scroll_up change_font_size all +1.0
+ mouse_map ctrl+scroll_down change_font_size all -1.0
+ 
++map ctrl+shift+s show_scrollback
++map ctrl+shift+u kitten unicode_input
++
+ # User Custom Configurations / 用户私有配置挂载点
+ include __custom__.conf
+-
+--- docs/evidence/round6/originals/configs/btop/btop.conf	2026-08-23 22:20:46.968822766 +0800
++++ configs/btop/btop.conf	2026-08-24 21:22:04.913168477 +0800
+@@ -23,7 +23,7 @@
+ #* Format: "box_name:P:G,box_name:P:G" P=(0 or 1) for alternate positions, G=graph symbol to use for box.
+ #* Use whitespace " " as separator between different presets.
+ #* Example: "cpu:0:default,mem:0:tty,proc:1:default cpu:0:braille,proc:0:tty"
+-presets = "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty"
++presets = "cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty cpu:0:default,mem:0:default,net:0:default,proc:0:default,gpu0:0:default"
+ 
+ #* Set to True to enable "h,j,k,l,g,G" keys for directional control in lists.
+ #* Conflicting keys for h:"help" and k:"kill" is accessible while holding shift.
+--- docs/evidence/round6/originals/configs/vivid/themes/nyx.yml	2026-08-23 22:27:15.651390391 +0800
++++ configs/vivid/themes/nyx.yml	2026-08-24 21:10:24.186329953 +0800
+@@ -38,12 +38,22 @@
+   missing_symlink_target:
+     foreground: ink
+     background: secondary
+-  setuid: {}
+-  setgid: {}
+-  file_with_capability: {}
+-  sticky_other_writable: {}
+-  other_writable: {}
+-  sticky: {}
++  setuid:
++    foreground: ink
++    background: secondary
++  setgid:
++    foreground: ink
++    background: tertiary
++  file_with_capability:
++    foreground: ink
++    background: primary
++  sticky_other_writable:
++    foreground: ink
++    background: tertiary
++  other_writable:
++    foreground: tertiary
++  sticky:
++    foreground: secondary
+   executable_file:
+     foreground: tertiary
+     font-style: bold
+--- docs/evidence/round6/originals/configs/mpv-nyx/mpv.conf	2026-08-23 22:13:25.859582614 +0800
++++ configs/mpv-nyx/mpv.conf	2026-08-24 21:10:24.186329953 +0800
+@@ -1,5 +1,6 @@
+ profile=fast
+ vo=gpu
++gpu-api=auto
+ hwdec=auto-safe
+ video-sync=display-resample
+ osc=yes
+@@ -10,6 +11,10 @@
+ volume-max=130
+ slang=zh-CN,zh,chi,zho,en
+ alang=zh-CN,zh,chi,zho,en
++sub-pos=95
++sub-font-size=42
++sub-border-size=2
++sub-shadow-offset=1
+ screenshot-directory=~~/screenshots
+ cache=yes
+ audio-file-auto=fuzzy
+--- docs/evidence/round6/originals/configs/mpv-nyx/input.conf	2026-08-23 22:12:45.304632898 +0800
++++ configs/mpv-nyx/input.conf	2026-08-24 21:14:22.232946723 +0800
+@@ -9,7 +9,7 @@
+ m cycle mute
+ [ add speed -0.1
+ ] add speed 0.1
+-\\ set speed 1
++\ set speed 1
+ q quit-watch-later
+ s screenshot video
+ S screenshot window
+--- docs/evidence/round6/originals/configs/mpv-nyx/run.sh	2026-08-23 22:25:44.893352449 +0800
++++ configs/mpv-nyx/run.sh	2026-08-24 21:10:24.187329947 +0800
+@@ -5,6 +5,28 @@
+ default_scripts="${XDG_CONFIG_HOME:-$HOME/.config}/mpv/scripts"
+ args=("--config-dir=$profile_dir")
+ 
++if ! command -v mpv >/dev/null 2>&1; then
++    printf '%s\n' "NyxMPV: mpv is not installed." >&2
++    exit 127
++fi
++
++if [ "${NYXNIRI_MPV_DIAGNOSTICS:-0}" = "1" ]; then
++    printf 'NyxMPV profile: %s\n' "$profile_dir" >&2
++    printf 'NyxMPV optional scripts:' >&2
++    for script in uosc/main.lua thumbfast.lua autoload.lua sponsorblock.lua; do
++        if [ -f "$default_scripts/$script" ]; then
++            printf ' %s' "$script" >&2
++        else
++            printf ' %s(missing)' "$script" >&2
++        fi
++    done
++    printf '\n' >&2
++fi
++
++if [ -n "${WAYLAND_DISPLAY:-}" ] && mpv --gpu-context=help 2>&1 | grep -Eq '(^|[[:space:]])wayland([[:space:]]|$)'; then
++    args+=("--gpu-context=wayland")
++fi
++
+ for script in uosc/main.lua thumbfast.lua autoload.lua sponsorblock.lua; do
+     if [ -f "$default_scripts/$script" ]; then
+         args+=("--script=$default_scripts/$script")
+--- docs/evidence/round6/originals/configs/nvim-nyx/init.lua	2026-08-23 22:18:08.657628951 +0800
++++ configs/nvim-nyx/init.lua	2026-08-24 21:16:31.612194937 +0800
+@@ -15,6 +15,42 @@
+ vim.opt.tabstop = 2
+ vim.opt.completeopt = { "menu", "menuone", "noselect" }
+ 
++local function find_files()
++  local root = vim.fn.getcwd()
++  local files = {}
++  if vim.fn.executable("fd") == 1 then
++    local result = vim.system({ "fd", "--type", "f", "--hidden", "--exclude", ".git", "--print0", "." }, {
++      cwd = root,
++      text = true,
++    }):wait()
++    if result.code == 0 then
++      for item in (result.stdout or ""):gmatch("([^%z]+)") do
++        files[#files + 1] = vim.fs.joinpath(root, item:gsub("^%./", ""))
++      end
++    end
++  end
++  if #files == 0 then
++    files = vim.fs.find(function(_, path)
++      return not path:find("/.git/", 1, true)
++    end, {
++      path = root,
++      type = "file",
++      limit = math.huge,
++    })
++  end
++  table.sort(files)
++  vim.ui.select(files, {
++    prompt = "Nyx files",
++    format_item = function(item)
++      return vim.fs.relpath(root, item) or item
++    end,
++  }, function(choice)
++    if choice then
++      vim.cmd("edit " .. vim.fn.fnameescape(choice))
++    end
++  end)
++end
++
+ local palette = dofile(vim.fn.stdpath("config") .. "/lua/nyx-theme.lua")
+ palette.apply()
+ 
+@@ -25,7 +61,7 @@
+ 
+ vim.keymap.set("n", "<leader>w", "<cmd>write<cr>", { desc = "Write buffer" })
+ vim.keymap.set("n", "<leader>q", "<cmd>quit<cr>", { desc = "Quit window" })
+-vim.keymap.set("n", "<leader>ff", "<cmd>find **/*<cr>", { desc = "Find file" })
++vim.keymap.set("n", "<leader>ff", find_files, { desc = "Find file" })
+ vim.keymap.set("n", "<leader>e", "<cmd>Explore<cr>", { desc = "File explorer" })
+ vim.keymap.set("n", "<leader>tn", "<cmd>tabnew<cr>", { desc = "New tab" })
+ 
+--- docs/evidence/round6/originals/configs/nvim-nyx/lua/nyx-theme.lua	2026-08-23 22:18:08.658628921 +0800
++++ configs/nvim-nyx/lua/nyx-theme.lua	2026-08-24 21:10:24.187329947 +0800
+@@ -34,6 +34,11 @@
+     Normal = { fg = p.on_surface, bg = p.surface_dim },
+     NormalFloat = { fg = p.on_surface, bg = p.surface },
+     FloatBorder = { fg = p.outline, bg = p.surface },
++    FloatTitle = { fg = p.primary, bg = p.surface, bold = true },
++    WinBar = { fg = p.on_surface_var, bg = p.surface_dim },
++    WinBarNC = { fg = p.outline, bg = p.surface_dim },
++    PmenuSbar = { bg = p.surface_bright },
++    PmenuThumb = { bg = p.primary },
+     CursorLine = { bg = p.surface },
+     LineNr = { fg = p.outline, bg = p.surface_dim },
+     CursorLineNr = { fg = p.primary, bold = true },
+@@ -55,6 +60,14 @@
+     DiagnosticWarn = { fg = p.tertiary },
+     DiagnosticInfo = { fg = p.primary },
+     DiagnosticHint = { fg = p.on_surface_var },
++    DiagnosticVirtualTextError = { fg = p.error, bg = p.surface },
++    DiagnosticVirtualTextWarn = { fg = p.tertiary, bg = p.surface },
++    DiagnosticVirtualTextInfo = { fg = p.primary, bg = p.surface },
++    DiagnosticVirtualTextHint = { fg = p.on_surface_var, bg = p.surface },
++    DiffAdd = { fg = p.primary, bg = p.surface },
++    DiffChange = { fg = p.tertiary, bg = p.surface },
++    DiffDelete = { fg = p.secondary, bg = p.surface },
++    NonText = { fg = p.surface_bright },
+     NyxYank = { fg = p.surface_dim, bg = p.secondary },
+     NyxDashboardTitle = { fg = p.primary, bold = true },
+   }
+--- docs/evidence/round6/originals/configs/zed/settings.json	2026-08-23 19:57:27.029241593 +0800
++++ configs/zed/settings.json	2026-08-24 21:11:24.713978244 +0800
+@@ -59,5 +59,53 @@
+     "mode": "system",
+     "light": "One Light",
+     "dark": "VSCode Dark Modern"
++  },
++  "theme_overrides": {
++    "VSCode Dark Modern": {
++      "editor.background": "#0a0f14",
++      "editor.foreground": "#e6f1f4",
++      "editor.gutter.background": "#0a0f14",
++      "editor.active_line.background": "#111820",
++      "editor.selection.background": "#24313b",
++      "editor.line_number": "#78929b",
++      "editor.active_line_number": "#62d8e7",
++      "editor.accent": "#62d8e7",
++      "editor.border": "#78929b",
++      "panel.background": "#111820",
++      "panel.focused_border": "#62d8e7",
++      "terminal.background": "#0a0f14",
++      "terminal.foreground": "#e6f1f4",
++      "terminal.ansi.black": "#0a0f14",
++      "terminal.ansi.red": "#ff9f8e",
++      "terminal.ansi.green": "#7fe7f3",
++      "terminal.ansi.yellow": "#f2c66d",
++      "terminal.ansi.blue": "#62d8e7",
++      "terminal.ansi.magenta": "#ffb3a5",
++      "terminal.ansi.cyan": "#a9bdc4",
++      "terminal.ansi.white": "#e6f1f4"
++    },
++    "One Light": {
++      "editor.background": "#f4f8f9",
++      "editor.foreground": "#172023",
++      "editor.gutter.background": "#f4f8f9",
++      "editor.active_line.background": "#dce7e9",
++      "editor.selection.background": "#c5e7eb",
++      "editor.line_number": "#6f7d80",
++      "editor.active_line_number": "#006875",
++      "editor.accent": "#006875",
++      "editor.border": "#6f7d80",
++      "panel.background": "#ffffff",
++      "panel.focused_border": "#006875",
++      "terminal.background": "#f4f8f9",
++      "terminal.foreground": "#172023",
++      "terminal.ansi.black": "#172023",
++      "terminal.ansi.red": "#9b3f33",
++      "terminal.ansi.green": "#2d756f",
++      "terminal.ansi.yellow": "#765a00",
++      "terminal.ansi.blue": "#006875",
++      "terminal.ansi.magenta": "#8b4f75",
++      "terminal.ansi.cyan": "#3f6f75",
++      "terminal.ansi.white": "#ffffff"
++    }
+   }
+ }
+--- docs/evidence/round6/originals/nyxniri/deploy.py	2026-08-24 19:58:44.837141219 +0800
++++ nyxniri/deploy.py	2026-08-24 21:11:24.715978233 +0800
+@@ -276,7 +276,7 @@
+     failures.extend(str(path) for path in required if not path.exists())
+     module_requirements = {
+         "bin": [config_destination("bin") / source.name for source in managed_bin_sources()],
+-        "yazi": [config_dir / "yazi" / "yazi.toml", config_dir / "yazi" / "theme.toml"],
++        "yazi": [config_dir / "yazi" / "yazi.toml", config_dir / "yazi" / "theme.toml", config_dir / "yazi" / "keymap.toml"],
+         "btop": [config_dir / "btop" / "btop.conf", config_dir / "btop" / "themes" / "nyx.theme"],
+         "vivid": [config_dir / "vivid" / "themes" / "nyx.yml"],
+         "mpv-nyx": [
+--- docs/evidence/round6/originals/tests/test_project_contracts.py	2026-08-24 20:09:24.571431044 +0800
++++ tests/test_project_contracts.py	2026-08-24 21:11:24.715978233 +0800
+@@ -116,7 +116,7 @@
+ 
+     def test_optional_profiles_have_complete_user_visible_entrypoints(self):
+         required = {
+-            "yazi": (ROOT / "configs/yazi/yazi.toml", ROOT / "configs/yazi/theme.toml"),
++            "yazi": (ROOT / "configs/yazi/yazi.toml", ROOT / "configs/yazi/theme.toml", ROOT / "configs/yazi/keymap.toml"),
+             "btop": (ROOT / "configs/btop/btop.conf", ROOT / "configs/btop/themes/nyx.theme"),
+             "vivid": (ROOT / "configs/vivid/themes/nyx.yml",),
+             "mpv-nyx": (ROOT / "configs/mpv-nyx/mpv.conf", ROOT / "configs/mpv-nyx/input.conf"),
+@@ -147,6 +147,12 @@
+                 keys.append(match.group(1))
+         self.assertEqual(len(keys), len(set(keys)))
+ 
++    def test_user_visible_profiles_expose_nyx_integrations(self):
++        self.assertIn('include optional=true "rules_optional.kdl"', (ROOT / "configs/niri/config.kdl").read_text(encoding="utf-8"))
++        self.assertIn("gpu0:0:default", (ROOT / "configs/btop/btop.conf").read_text(encoding="utf-8"))
++        self.assertIn("gpu-api=auto", (ROOT / "configs/mpv-nyx/mpv.conf").read_text(encoding="utf-8"))
++        self.assertIn("theme_overrides", (ROOT / "configs/zed/settings.json").read_text(encoding="utf-8"))
++
+     def test_geometry_tokens_are_shared_by_orbit_and_picker(self):
+         token_text = (ROOT / "design/tokens.toml").read_text(encoding="utf-8")
+         orbit_text = (ROOT / "configs/niri/scripts/orbit/config.py").read_text(encoding="utf-8")
+--- /dev/null	2026-08-24 19:55:46.024593879 +0800
++++ configs/niri/rules_optional.kdl	2026-08-24 21:12:33.932576032 +0800
+@@ -0,0 +1,26 @@
++window-rule {
++    match app-id=r"^(firefox|org\.mozilla\.firefox|chromium|google-chrome)$" title=r"(?i)(picture.?in.?picture|画中画)"
++    open-floating true
++    open-focused false
++    default-column-width { proportion 0.34; }
++    default-window-height { proportion 0.30; }
++    default-floating-position x=24 y=24 relative-to="bottom-right"
++}
++
++window-rule {
++    match app-id="steam" title=r"^notificationtoasts_.*$"
++    open-focused false
++    open-floating true
++    default-floating-position x=12 y=12 relative-to="bottom-right"
++}
++
++window-rule {
++    match app-id="steam" title=r"(?i)^(friends list|好友列表)$"
++    open-focused false
++    default-column-width { proportion 0.24; }
++}
++
++window-rule {
++    match app-id=r"^(org\.keepassxc\.KeePassXC|org\.gnome\.Secrets|com\.bitwarden\.desktop)$"
++    block-out-from "screen-capture"
++}
+--- /dev/null	2026-08-24 19:55:46.024593879 +0800
++++ configs/yazi/keymap.toml	2026-08-24 21:09:14.636734085 +0800
+@@ -0,0 +1,30 @@
++
++[[mgr.prepend_keymap]]
++on = "<Tab>"
++run = "spot"
++desc = "Preview focused file"
++
++[[mgr.prepend_keymap]]
++on = "Z"
++run = "plugin zoxide"
++desc = "Jump with zoxide"
++
++[[mgr.prepend_keymap]]
++on = "z"
++run = "plugin fzf"
++desc = "Find file or directory"
++
++[[mgr.prepend_keymap]]
++on = ["m", "s"]
++run = "linemode size"
++desc = "Show file sizes"
++
++[[mgr.prepend_keymap]]
++on = ["m", "p"]
++run = "linemode permissions"
++desc = "Show permissions"
++
++[[mgr.prepend_keymap]]
++on = ["m", "m"]
++run = "linemode mtime"
++desc = "Show modification time"

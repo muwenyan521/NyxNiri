@@ -29,16 +29,26 @@
 
 </div>
 
+## 个人偏好改版说明
+
+这个仓库是我基于 NyxNiri 按个人使用习惯整理的一套配置。当前改动集中在
+Nyx token 配色、Shorin Niri 快捷键、终端反馈降噪，以及 Kitty、Yazi、btop、
+mpv、Neovim 和 Zed 的独立配置。Niri、Noctalia、Orbit 仍然是核心组件；这
+是一套偏好配置，不代表上游默认方案。部署到其他机器前，请先检查对应配置。
+
 ## 特性
 
-- 壁纸选择器（`Super+W`）— 聚合静态与动态壁纸，支持实时搜索与分类。
+- 壁纸选择器（`Super+Alt+W`）— 聚合静态与动态壁纸，支持实时搜索与分类。
+- 壁纸选择器会按屏幕空间自适应 2–4 列；空目录、空分类和无结果搜索都有明确提示。
 - 壁纸色彩联动 — Noctalia V5 直接从壁纸取色；`mpvpaper` 配合 `ffmpeg` 抽取视频帧，动态壁纸亦实时生成调色板。
 - 明暗模式同步 — GSettings、GTK 3/4、XDG Desktop Portal、Kitty 终端以及浏览器（Brave、Chromium、Firefox）即时跟随主题变化。
-- 护眼模式（`Super+N`）— 调暖色温、关闭模糊、纯色不透明背景。
-- Scratchpad 终端（`Super+~`）— 随时快捷呼出 Kitty 持久浮动终端。
-- Orbit 启动器（`Super+A` / `Super+鼠标前侧键`）— 矢量星环启动器，聚合应用、工具、网页与 AI/搜索引擎轮盘（全 TOML 自定义）。
+- 护眼模式（`Super+Shift+N`）— 调暖色温、关闭模糊、纯色不透明背景。
+- Scratchpad 终端（`Super+~` 或 `Super+/`）— 随时快捷呼出 Kitty 持久浮动终端。
+- Orbit 启动器（`Super+Alt+Z` / `Super+鼠标前侧键`）— 矢量星环启动器，聚合应用、工具、网页与 AI/搜索引擎轮盘（全 TOML 自定义）。
 - 终端与 Shell — Fish 代理/缓存别名，Kitty 光标轨迹，Windows 风格快捷键。
+- 个人偏好层 — 代理状态显式探测、精简 Git prompt、scrollback 工具、GPU 可选 btop 布局、Yazi 快捷键，以及 Nyx 风格编辑器/媒体配置。
 - NyxMellow 动态 fcitx5 皮肤 — mellow 圆角形状，随 Noctalia 自动取色。
+- 视觉系统 — `DESIGN.md` 和 token 文件集中定义颜色、间距、圆角与动效；设置 `NYXNIRI_REDUCED_MOTION=1` 可关闭动态过渡。
 
 ## 环境要求
 
@@ -108,6 +118,12 @@ NyxNiri
     ├── kitty/                  # 终端
     ├── fish/                   # 别名与函数
     ├── fastfetch/              # 系统信息
+    ├── yazi/                   # 文件管理器主题与预览默认值
+    ├── btop/                   # 系统监视器主题
+    ├── vivid/                  # 共享文件颜色主题
+    ├── mpv-nyx/                # 隔离的 Nyx mpv 配置
+    ├── nvim-nyx/               # 隔离的 Nyx Neovim 配置
+    ├── bin/                    # Shorin-contrib 命令组件（部署到 ~/.local/bin）
     ├── zed/                    # 编辑器
     └── starship.toml           # 提示符
 ```
@@ -155,6 +171,11 @@ NyxNiri
 | `nyxhelp pkg` | 包管理快捷指令（`up`、`in`、`se`、`un`、`clean`） |
 | `nyxhelp all` | 完整速查手册 |
 
+Shorin-contrib 命令组件会作为显式命令部署到 `~/.local/bin`，例如
+`preview`、`lsi`、`timer`、`procusage`、`pac`、`pacr`、`pak`、
+`quicksave`、`quickload`、`sysup`、`shorin-clean` 以及媒体处理工具。
+它们不会覆盖 `ls`、`cat`、`ps` 等 Shell 基础命令。
+
 ## 快捷键
 
 <details>
@@ -164,17 +185,18 @@ NyxNiri
 | :--- | :--- |
 | <kbd>Super</kbd> + <kbd>Enter</kbd> | 打开终端 |
 | <kbd>Super</kbd> + <kbd>Q</kbd> | 关闭窗口 |
-| <kbd>Super</kbd> + <kbd>T</kbd> | 切换浮动/平铺 |
+| <kbd>Super</kbd> + <kbd>T</kbd> | 打开 Kitty 终端 |
+| <kbd>Super</kbd> + <kbd>V</kbd> | 切换浮动/平铺 |
 | <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> | 平铺/浮动层焦点穿透切换 |
-| <kbd>Super</kbd> + <kbd>G</kbd> | 切换标签页列模式 (Tabbed Group) |
+| <kbd>Super</kbd> + <kbd>X</kbd> | 切换标签页列模式 (Tabbed Group) |
 | <kbd>Super</kbd> + <kbd>F</kbd> | 最大化当前列 |
 | <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd> | 全屏 |
 | <kbd>Super</kbd> + <kbd>Tab</kbd> | 工作区总览 |
-| <kbd>Super</kbd> + <kbd>Z</kbd> / <kbd>C</kbd> | 聚焦左/右侧列 |
+| <kbd>Super</kbd> + <kbd>H</kbd> / <kbd>L</kbd> | 聚焦左/右侧列 |
 | <kbd>Super</kbd> + <kbd>方向键</kbd> | 焦点移动（跨列 / 跨屏 / 跨工作区） |
 | <kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>方向键</kbd> | 移动窗口（跨列 / 跨屏 / 跨工作区） |
 | <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>方向键</kbd> | 本地微调移动（含列内窗口上下调位） |
-| <kbd>Super</kbd> + <kbd>D</kbd> / <kbd>U</kbd> | 工作区下/上 |
+| <kbd>Super</kbd> + <kbd>D</kbd> / <kbd>U</kbd> | 向右移动窗口 / 聚焦上方工作区 |
 | <kbd>Super</kbd> + <kbd>Space</kbd> | 切换预设列宽比例 |
 | <kbd>Super</kbd> + <kbd>-</kbd> / <kbd>=</kbd> | 收缩/拉伸列宽 |
 
@@ -185,25 +207,25 @@ NyxNiri
 
 | 快捷键 | 动作 |
 | :--- | :--- |
-| <kbd>Super</kbd> + <kbd>R</kbd> | 启动器 |
-| <kbd>Super</kbd> + <kbd>E</kbd> | 文件管理器 |
-| <kbd>Super</kbd> + <kbd>X</kbd> | 电源菜单 |
-| <kbd>Super</kbd> + <kbd>I</kbd> | 控制中心 |
-| <kbd>Super</kbd> + <kbd>V</kbd> | 剪贴板 |
-| <kbd>Super</kbd> + <kbd>W</kbd> | 壁纸选择器（静态与动态） |
-| <kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>W</kbd> | 免打扰随机切换壁纸 |
-| <kbd>Super</kbd> + <kbd>N</kbd> | 护眼模式 |
-| <kbd>Super</kbd> + <kbd>~</kbd> | 切换 Kitty Scratchpad 浮动终端 |
-| <kbd>Super</kbd> + <kbd>A</kbd> / <kbd>Super</kbd> + <kbd>鼠标前侧键</kbd> | Orbit 矢量星环启动器 |
-| <kbd>Super</kbd> + <kbd>L</kbd> | 锁屏 |
+| <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> | 启动器 |
+| <kbd>Super</kbd> + <kbd>E</kbd> | Yazi 文件管理器 |
+| <kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>X</kbd> | 电源菜单 |
+| <kbd>Super</kbd> + <kbd>F2</kbd> | 控制中心 |
+| <kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>V</kbd> | 剪贴板 |
+| <kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>W</kbd> | 壁纸选择器（静态与动态） |
+| <kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>W</kbd> | 免打扰随机切换壁纸 |
+| <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>N</kbd> | 护眼模式 |
+| <kbd>Super</kbd> + <kbd>~</kbd> / <kbd>Super</kbd> + <kbd>/</kbd> | 切换 Kitty Scratchpad 浮动终端 |
+| <kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>Z</kbd> / <kbd>Super</kbd> + <kbd>鼠标前侧键</kbd> | Orbit 矢量星环启动器 |
+| <kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>L</kbd> | 锁屏 |
 | <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd> | 截图 |
-| <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> | 重载 Niri |
-| <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>Q</kbd> | 退出 Niri |
+| <kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> | 重载 Niri |
+| <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd> | 退出 Niri |
 
 </details>
 
 > [!TIP]
-> 快速查看：`nyxhelp keys`。Niri 的完整按键覆盖层请按 <kbd>Super</kbd> + <kbd>/</kbd>。
+> 快速查看：`nyxhelp keys`。Niri 的完整按键覆盖层请按 <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>/</kbd>。
 
 ## 可选模块
 

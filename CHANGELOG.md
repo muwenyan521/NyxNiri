@@ -5,6 +5,16 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [Unreleased]
+
+### Changed
+- 壁纸选择器会按窗口大小排版，并在没有匹配壁纸时显示明确状态。
+- Orbit 与壁纸选择器共用调色板、动画和实例锁，快速重复触发更稳定。
+- 搜索框支持行首、行尾、清空、整词删除和整页翻页。
+- 终端新增 Yazi、btop、磁盘分析和 Git 差异入口，并提供缺失工具回退。
+- Orbit 新增工作区工具菜单，Fastfetch、Starship、Yazi、mpv 和 Nvim 可使用 Nyx 配色。
+- 迁移 Shorin Niri 的终端、Vim 导航、媒体和截图键位，并加入 Shorin-contrib 命令组件。
+
 ## [v3.0.0] - 2026-08-22
 
 ### Added

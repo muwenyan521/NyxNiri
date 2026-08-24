@@ -178,6 +178,10 @@ if command -v pkill >/dev/null 2>&1; then
     pkill -SIGUSR1 -x kitty 2>/dev/null || true
 fi
 
+if [ -x "$HOME/.config/mpv-nyx/token-sync.sh" ]; then
+    "$HOME/.config/mpv-nyx/token-sync.sh" "$HOME/.config/niri/nyx-tokens.toml" "$HOME/.config/mpv-nyx/script-opts/uosc.conf" || true
+fi
+
 # Kvantum Qt theme synchronization (silent INI update only if theme directory exists)
 if [ -d "/usr/share/Kvantum/$KVANTUM_THEME" ] || [ -d "$HOME/.config/Kvantum/$KVANTUM_THEME" ]; then
     atomic_update_ini "$HOME/.config/Kvantum/kvantum.kvconfig" "theme" "$KVANTUM_THEME"

@@ -10,11 +10,12 @@ include "layout.kdl"
 include "animations.kdl"
 // 引入窗口与图层规则
 include "rules.kdl"
+include optional=true "rules_optional.kdl"
 // 引入快捷键绑定配置
 include "binds.kdl"
 
 overview {
-    backdrop-color "#4c566a90"
+    backdrop-color "#0a0f1488"
     workspace-shadow {
         off
     }
@@ -58,8 +59,8 @@ recent-windows {
     }
     highlight {
         corner-radius 12
-        active-color "#b6c7e7"
-        urgent-color "#ffb4ab"
+        active-color "#62d8e7"
+        urgent-color "#ff9f8e"
     }
 }
 

@@ -18,7 +18,7 @@ if __name__ == "__main__":
         if SCRIPTS_DIR not in sys.path:
             sys.path.insert(0, SCRIPTS_DIR)
         from orbit.window import OrbitLauncher
-        from orbit.lock import acquire_instance_lock, release_instance_lock
+        from nyxui.runtime import acquire_instance_lock, release_instance_lock
         from gi.repository import Gtk
         import signal
 

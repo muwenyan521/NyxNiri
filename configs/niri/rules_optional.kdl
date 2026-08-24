@@ -1,0 +1,26 @@
+window-rule {
+    match app-id=r"^(firefox|org\.mozilla\.firefox|chromium|google-chrome)$" title=r"(?i)(picture.?in.?picture|画中画)"
+    open-floating true
+    open-focused false
+    default-column-width { proportion 0.34; }
+    default-window-height { proportion 0.30; }
+    default-floating-position x=24 y=24 relative-to="bottom-right"
+}
+
+window-rule {
+    match app-id="steam" title=r"^notificationtoasts_.*$"
+    open-focused false
+    open-floating true
+    default-floating-position x=12 y=12 relative-to="bottom-right"
+}
+
+window-rule {
+    match app-id="steam" title=r"(?i)^(friends list|好友列表)$"
+    open-focused false
+    default-column-width { proportion 0.24; }
+}
+
+window-rule {
+    match app-id=r"^(org\.keepassxc\.KeePassXC|org\.gnome\.Secrets|com\.bitwarden\.desktop)$"
+    block-out-from "screen-capture"
+}

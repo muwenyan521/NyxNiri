@@ -49,6 +49,21 @@ def discover_config_items() -> List[str]:
             return sorted(items)
     return ["fastfetch", "fish", "kitty", "niri", "noctalia", "starship.toml", "xdg-desktop-portal", "zed"]
 
+
+def config_destination(item: str) -> Path:
+    env = get_env()
+    if item == "bin":
+        return env.home / ".local/bin"
+    return env.config_dir / item
+
+
+def managed_bin_sources() -> List[Path]:
+    src_dir = get_env().configs_src / "bin"
+    if not src_dir.is_dir():
+        return []
+    return sorted(path for path in src_dir.iterdir() if path.is_file())
+
+
 def atomic_replace_item(src: Path, dest: Path, preserved_log: Optional[List[str]] = None, test_mode: bool = False) -> bool:
     """Atomic swap deployment via sibling temp directories with Dunder Protocol preservation."""
     pid = os.getpid()
@@ -81,7 +96,12 @@ def atomic_replace_item(src: Path, dest: Path, preserved_log: Optional[List[str]
         dest_parent.mkdir(parents=True, exist_ok=True)
         if tmp_new.exists() or tmp_new.is_symlink():
             _remove_path(tmp_new)
-        shutil.copytree(src, tmp_new, symlinks=True)
+        shutil.copytree(
+            src,
+            tmp_new,
+            symlinks=True,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", "*.new.*", "*.old.*"),
+        )
 
         # Dunder Protocol: Scan and inherit *__custom__* files and directories
         if dest.is_dir():
@@ -166,7 +186,15 @@ def _phase_atomic_deployment(
     failed_items: List[str] = []
     for item in items_to_deploy:
         src = env.configs_src / item
-        dest = config_dir / item
+        dest = config_destination(item)
+
+        if item == "bin" and src.is_dir():
+            dest.mkdir(parents=True, exist_ok=True)
+            for component in managed_bin_sources():
+                component_dest = dest / component.name
+                if not atomic_replace_item(component, component_dest, preserved_log=preserved_log, test_mode=test_mode):
+                    failed_items.append(f"bin/{component.name}")
+            continue
 
         if src.exists():
             temp_monitor: Optional[Path] = None
@@ -209,22 +237,87 @@ def _phase_atomic_deployment(
         f"{MAIN_WM}/scripts/orbit-launcher.py",
         f"{MAIN_WM}/scripts/niri-scratch-menu.py",
         f"{MAIN_WM}/scripts/wallpaper-picker.py",
+        "mpv-nyx/token-sync.sh",
+        "mpv-nyx/run.sh",
     ]
     for rel in scripts_to_chmod:
         p = config_dir / rel
         if p.is_file():
             p.chmod(0o755)
 
-    # Initial EyeCare symlink
-    effects_normal = config_dir / MAIN_WM / "effects_normal.kdl"
-    effects_sym = config_dir / MAIN_WM / "effects.kdl"
-    if effects_normal.is_file() and not effects_sym.exists() and not effects_sym.is_symlink():
-        try:
-            effects_sym.symlink_to(effects_normal)
-        except Exception:
-            pass
+    if MAIN_WM in items_to_deploy:
+        effects_normal = config_dir / MAIN_WM / "effects_normal.kdl"
+        effects_sym = config_dir / MAIN_WM / "effects.kdl"
+        if effects_normal.is_file() and (not effects_sym.exists() or effects_sym.is_symlink() and not effects_sym.resolve().is_file()):
+            try:
+                effects_sym.unlink(missing_ok=True)
+                effects_sym.symlink_to(effects_normal)
+            except Exception:
+                pass
 
     return failed_items
+
+
+def validate_deployed_configs(required_items: Optional[List[str]] = None) -> List[str]:
+    env = get_env()
+    config_dir = env.config_dir
+    failures: List[str] = []
+    selected = set(required_items) if required_items is not None else set(discover_config_items())
+    required = []
+    if MAIN_WM in selected:
+        required.extend([
+            config_dir / MAIN_WM / "config.kdl",
+            config_dir / MAIN_WM / "effects_normal.kdl",
+            config_dir / MAIN_WM / "effects_eyecare.kdl",
+            config_dir / MAIN_WM / "effects.kdl",
+        ])
+    if THEME_ENGINE in selected:
+        required.append(config_dir / THEME_ENGINE / f"{THEME_ENGINE}-config.toml")
+    failures.extend(str(path) for path in required if not path.exists())
+    module_requirements = {
+        "bin": [config_destination("bin") / source.name for source in managed_bin_sources()],
+        "yazi": [config_dir / "yazi" / "yazi.toml", config_dir / "yazi" / "theme.toml", config_dir / "yazi" / "keymap.toml"],
+        "btop": [config_dir / "btop" / "btop.conf", config_dir / "btop" / "themes" / "nyx.theme"],
+        "vivid": [config_dir / "vivid" / "themes" / "nyx.yml"],
+        "mpv-nyx": [
+            config_dir / "mpv-nyx" / "mpv.conf",
+            config_dir / "mpv-nyx" / "input.conf",
+            config_dir / "mpv-nyx" / "script-opts" / "uosc.conf",
+            config_dir / "mpv-nyx" / "token-sync.sh",
+            config_dir / "mpv-nyx" / "run.sh",
+        ],
+        "nvim-nyx": [
+            config_dir / "nvim-nyx" / "init.lua",
+            config_dir / "nvim-nyx" / "lua" / "nyx-theme.lua",
+        ],
+    }
+    for item in selected:
+        failures.extend(str(path) for path in module_requirements.get(item, []) if not path.is_file())
+    if MAIN_WM in selected:
+        effects = config_dir / MAIN_WM / "effects.kdl"
+        if effects.is_symlink() and not effects.resolve().is_file():
+            failures.append(str(effects))
+    for item in selected:
+        root = config_destination(item)
+        if not root.exists():
+            continue
+        paths = root.rglob("*") if root.is_dir() else (root,)
+        for path in paths:
+            if path.is_dir() and path.name == "__pycache__":
+                failures.append(str(path))
+            elif path.is_file() and path.suffix in {".pyc", ".pyo"}:
+                failures.append(str(path))
+    niri = shutil.which(MAIN_WM)
+    if MAIN_WM in selected and niri and (config_dir / MAIN_WM / "config.kdl").is_file():
+        result = subprocess.run(
+            [niri, "validate", "--config", str(config_dir / MAIN_WM / "config.kdl")],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            failures.append(f"niri validate: {result.stderr.strip() or result.stdout.strip()}")
+    return failures
 
 def _phase_render_templates() -> None:
     """Render portable template paths (/home/user -> real $HOME, dynamic screenshot path)."""
@@ -574,6 +667,10 @@ def deploy_selected_configs(
         return failed_items
     _phase_render_templates()
     _phase_hardware_patches()
+    contract_failures = validate_deployed_configs(items_to_deploy)
+    if contract_failures:
+        print(msg("deploy_failed", ", ".join(contract_failures)), file=sys.stderr)
+        return contract_failures
     _phase_post_install_services()
     print(msg("copy_done"))
     return []
@@ -593,6 +690,11 @@ def test_deploy() -> bool:
         return False
     _phase_render_templates()
     _phase_hardware_patches()
+    contract_failures = validate_deployed_configs()
+    if contract_failures:
+        print(msg("deploy_failed", ", ".join(contract_failures)), file=sys.stderr)
+        render_completion_screen(mode="test", chosen_items=items, preserved_lines=preserved_log, failed_items=contract_failures)
+        return False
     wallpaper_result = deploy_wallpapers(do_download=False)
     render_completion_screen(
         mode="test",

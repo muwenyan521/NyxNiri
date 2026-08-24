@@ -1,0 +1,44 @@
+[mgr]
+ratio = [1, 3, 4]
+sort_by = "natural"
+sort_sensitive = false
+sort_reverse = false
+linemode = "size"
+show_hidden = true
+show_symlink = true
+scrolloff = 6
+
+[preview]
+wrap = "yes"
+tab_size = 2
+max_width = 900
+max_height = 900
+
+[opener]
+edit = [
+    { run = "nvim %s", block = true, for = "unix" },
+]
+play = [
+    { run = "mpv --no-terminal %s", orphan = true, for = "unix" },
+]
+open = [
+    { run = "xdg-open %s", orphan = true, for = "unix" },
+]
+
+[open]
+rules = [
+    { mime = "text/*", use = "edit" },
+    { mime = "video/*", use = "play" },
+    { mime = "audio/*", use = "play" },
+    { mime = "image/*", use = "open" },
+    { mime = "application/pdf", use = "open" },
+]
+
+[tasks]
+micro_workers = 5
+bizarre_retry = 3
+
+[plugin]
+prepend_previewers = [
+    { mime = "image/*", run = 'chafa "$1" --format symbols --size "$w"x"$h" --animate off' },
+]

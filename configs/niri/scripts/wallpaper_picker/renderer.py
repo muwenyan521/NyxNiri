@@ -12,18 +12,21 @@ gi.require_version("PangoCairo", "1.0")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gdk, GLib, Pango, PangoCairo, GdkPixbuf
 
-from .config import (
-    CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS, THUMB_HEIGHT,
-    HEADER_HEIGHT, GRID_COLS
-)
+from .config import CARD_RADIUS
+from nyxui.tokens import token
 
 # ── Pre-allocated Font Descriptions for Zero-Allocation Rendering Loop ──────────
-FONT_HEADER_TITLE = Pango.FontDescription("Noto Sans CJK SC, Inter SemiBold 15")
-FONT_SEARCH_ICON = Pango.FontDescription("JetBrainsMono Nerd Font 12")
-FONT_SEARCH_TEXT = Pango.FontDescription("Noto Sans CJK SC 10")
-FONT_CLEAR_ICON = Pango.FontDescription("JetBrainsMono Nerd Font 10")
-FONT_CHIP = Pango.FontDescription("Noto Sans CJK SC, Inter Medium 9.5")
-FONT_CARD_TITLE = Pango.FontDescription("Noto Sans CJK SC, Inter SemiBold 9.5")
+UI_FONT = str(token("typography", "ui_family", "Noto Sans CJK SC, Inter, sans-serif"))
+MONO_FONT = str(token("typography", "mono_family", "JetBrains Mono, Noto Sans Mono, monospace"))
+TITLE_SIZE = float(token("typography", "title_size", 15))
+BODY_SIZE = float(token("typography", "body_size", 10))
+CAPTION_SIZE = float(token("typography", "caption_size", 9))
+FONT_HEADER_TITLE = Pango.FontDescription(f"{UI_FONT} SemiBold {TITLE_SIZE:g}")
+FONT_SEARCH_ICON = Pango.FontDescription(f"{MONO_FONT} {CAPTION_SIZE + 3:g}")
+FONT_SEARCH_TEXT = Pango.FontDescription(f"{UI_FONT} {BODY_SIZE:g}")
+FONT_CLEAR_ICON = Pango.FontDescription(f"{MONO_FONT} {CAPTION_SIZE + 1:g}")
+FONT_CHIP = Pango.FontDescription(f"{UI_FONT} Medium {CAPTION_SIZE + 0.5:g}")
+FONT_CARD_TITLE = Pango.FontDescription(f"{UI_FONT} SemiBold {CAPTION_SIZE + 0.5:g}")
 
 
 def draw_rounded_rect(cr, x: float, y: float, w: float, h: float, r: float):
@@ -257,8 +260,8 @@ def draw_card(cr, x: float, y: float, w: float, h: float, item,
     surf_bright = palette.get("surface_bright", (0.16, 0.18, 0.24))
 
     # Subtle elevation on hover
-    card_y = y - hover_val * 4.0
-    r = CARD_RADIUS
+    card_y = y
+    r = min(CARD_RADIUS, h / 4.0)
 
     # 1. Hover Glow / Shadow
     if is_hovered or is_active or is_current:
@@ -282,10 +285,16 @@ def draw_card(cr, x: float, y: float, w: float, h: float, item,
     cr.fill()
 
     # 3. Fast Pre-rendered Cairo Surface Blit (100% Pure Unobstructed Artwork)
-    thumb_h = THUMB_HEIGHT
+    thumb_h = h - 44.0
     if item.surface:
-        cr.set_source_surface(item.surface, x, card_y)
+        cr.save()
+        cr.rectangle(x, card_y, w, thumb_h)
+        cr.clip()
+        cr.translate(x, card_y)
+        cr.scale(w / max(1.0, item.surface.get_width()), thumb_h / max(1.0, item.surface.get_height()))
+        cr.set_source_surface(item.surface, 0, 0)
         cr.paint()
+        cr.restore()
     else:
         draw_top_rounded_rect(cr, x, card_y, w, thumb_h, r)
         cr.set_source_rgba(0.08, 0.09, 0.13, 0.85)
@@ -352,4 +361,38 @@ def draw_scrollbar(cr, x: float, y: float, h: float, scroll_y: float, max_scroll
     draw_rounded_rect(cr, x, thumb_y, sb_w, thumb_h, sb_r)
     cr.set_source_rgba(prim_rgb[0], prim_rgb[1], prim_rgb[2], 0.45)
     cr.fill()
+    cr.restore()
+
+
+def draw_empty_state(cr, x: float, y: float, w: float, h: float, title: str, body: str,
+                     palette: dict, create_layout_fn):
+    on_surf = palette["on_surface"]
+    on_surf_var = palette["on_surface_var"]
+    prim_rgb = palette["primary"]
+    center_x = x + w / 2.0
+    center_y = y + h / 2.0 - 16.0
+
+    cr.save()
+    cr.arc(center_x, center_y - 22.0, 22.0, 0.0, 2.0 * math.pi)
+    cr.set_source_rgba(prim_rgb[0], prim_rgb[1], prim_rgb[2], 0.12)
+    cr.fill()
+    cr.arc(center_x, center_y - 22.0, 10.0, 0.0, 2.0 * math.pi)
+    cr.set_source_rgba(prim_rgb[0], prim_rgb[1], prim_rgb[2], 0.72)
+    cr.fill()
+
+    title_layout = create_layout_fn(title)
+    title_layout.set_font_description(Pango.FontDescription("Noto Sans CJK SC, Inter SemiBold 13"))
+    tw, th = title_layout.get_pixel_size()
+    cr.move_to(center_x - tw / 2.0, center_y + 14.0)
+    cr.set_source_rgba(on_surf[0], on_surf[1], on_surf[2], 0.96)
+    PangoCairo.show_layout(cr, title_layout)
+
+    body_layout = create_layout_fn(body)
+    body_layout.set_font_description(Pango.FontDescription("Noto Sans CJK SC, Inter 9.5"))
+    body_layout.set_width(int(min(w - 48.0, 420.0) * Pango.SCALE))
+    body_layout.set_alignment(Pango.Alignment.CENTER)
+    bw, _ = body_layout.get_pixel_size()
+    cr.move_to(center_x - min(bw, w - 48.0) / 2.0, center_y + 40.0)
+    cr.set_source_rgba(on_surf_var[0], on_surf_var[1], on_surf_var[2], 0.68)
+    PangoCairo.show_layout(cr, body_layout)
     cr.restore()

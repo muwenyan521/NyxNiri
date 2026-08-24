@@ -144,3 +144,65 @@ icon = "󰸉"
 cmd = "~/.config/niri/scripts/wallpaper-picker.py"
 shortcut = "4"
 color_key = "secondary"
+
+[[items]]
+id = "workspace-tools"
+name = "Workspace Tools"
+desc = "Folder · 6 Tools"
+icon = "󰘳"
+shortcut = "5"
+color_key = "primary"
+
+  [[items.children]]
+  id = "yazi"
+  name = "Yazi"
+  desc = "File Manager"
+  icon = "󰉋"
+  cmd = "kitty --title NyxYazi fish -lc 'if functions -q y; y; else; yazi; end'"
+  shortcut = "1"
+  color_key = "primary"
+
+  [[items.children]]
+  id = "btop"
+  name = "btop"
+  desc = "System Monitor"
+  icon = "󰍛"
+  cmd = "kitty --title NyxMonitor btop"
+  shortcut = "2"
+  color_key = "tertiary"
+
+  [[items.children]]
+  id = "mpv-nyx"
+  name = "Nyx MPV"
+  desc = "Media Player Profile"
+  icon = "󰐹"
+  cmd = "kitty --title NyxMPV ~/.config/mpv-nyx/run.sh"
+  shortcut = "5"
+  color_key = "primary"
+
+  [[items.children]]
+  id = "nvim-nyx"
+  name = "Nyx Nvim"
+  desc = "Editor Profile"
+  icon = ""
+  cmd = "kitty --title NyxNvim env NVIM_APPNAME=nvim-nyx nvim"
+  shortcut = "6"
+  color_key = "secondary"
+
+  [[items.children]]
+  id = "fastfetch"
+  name = "Fastfetch"
+  desc = "System Snapshot"
+  icon = "󰋼"
+  cmd = "kitty --title NyxFetch fastfetch"
+  shortcut = "3"
+  color_key = "secondary"
+
+  [[items.children]]
+  id = "disk"
+  name = "Disk Usage"
+  desc = "Mounted Disks"
+  icon = "󰋊"
+  cmd = "kitty --title NyxDisk fish -lc 'disk; read -P \"Press Enter to close\"'"
+  shortcut = "4"
+  color_key = "tertiary"

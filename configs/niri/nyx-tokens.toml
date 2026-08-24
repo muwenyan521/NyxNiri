@@ -1,0 +1,78 @@
+[meta]
+version = 1
+base_unit = 4
+
+[color.dark]
+surface = "#111820"
+surface_dim = "#0a0f14"
+surface_bright = "#24313b"
+primary = "#62d8e7"
+secondary = "#ff9f8e"
+tertiary = "#f2c66d"
+error = "#ffb4ab"
+on_surface = "#e6f1f4"
+on_surface_var = "#a9bdc4"
+outline = "#78929b"
+shadow = "#05080b"
+
+[color.light]
+surface = "#f4f8f9"
+surface_dim = "#dce7e9"
+surface_bright = "#ffffff"
+primary = "#006875"
+secondary = "#9b3f33"
+tertiary = "#765a00"
+error = "#ba1a1a"
+on_surface = "#172023"
+on_surface_var = "#3f4a4d"
+outline = "#6f7d80"
+shadow = "#496067"
+
+[shape]
+corner_sm = 8
+corner_md = 14
+corner_lg = 20
+dialog_radius = 24
+
+[spacing]
+space_1 = 4
+space_2 = 8
+space_3 = 12
+space_4 = 16
+space_5 = 24
+space_6 = 32
+panel_padding = 28
+grid_gap = 16
+
+[motion]
+spring_omega = 16.0
+spring_damping = 0.82
+entry_ms = 180
+reduced_motion = false
+
+[typography]
+ui_family = "Noto Sans CJK SC, Inter, sans-serif"
+mono_family = "JetBrains Mono, Noto Sans Mono, monospace"
+title_size = 15
+body_size = 10
+caption_size = 9
+
+[accessibility]
+min_touch_target = 40
+focus_width = 2
+high_contrast_ratio = 4.5
+
+[orbit]
+base_radius = 168
+deadzone_radius = 48
+hysteresis_deg = 6
+float_spring = 16
+capsule_idle_height = 48
+capsule_active_height = 54
+
+[wallpaper]
+window_radius = 28
+card_radius = 16
+padding_x = 32
+gap_x = 24
+gap_y = 20

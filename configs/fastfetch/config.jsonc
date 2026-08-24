@@ -3,8 +3,8 @@
     "logo": {
         "type": "small",
         "color": {
-            "1": "magenta",
-            "2": "magenta"
+            "1": "cyan",
+            "2": "yellow"
         },
         "padding": {
             "top": 3,
@@ -14,9 +14,11 @@
     },
     "display": {
         "separator": "    ",
+        "disableLinewrap": true,
         "color": {
-            "keys": "magenta",
-            "title": "magenta"
+            "keys": "cyan",
+            "title": "white",
+            "output": "white"
         }
     },
     "modules": [
@@ -26,7 +28,7 @@
         },
         {
             "type": "custom",
-            "format": " {#magenta}STAY LIBRE{#}  ──  自由であり続けろ"
+            "format": " {#cyan}STAY LIBRE{#}  {#yellow}──{#}  自由であり続けろ"
         },
         {
             "type": "custom",
@@ -34,7 +36,7 @@
         },
         {
             "type": "custom",
-            "format": " {#magenta}✦ system{#}"
+            "format": " {#cyan}✦ system{#}"
         },
         {
             "type": "os",
@@ -72,7 +74,7 @@
         },
         {
             "type": "custom",
-            "format": " {#magenta}✦ hardware{#}"
+            "format": " {#yellow}✦ hardware{#}"
         },
         {
             "type": "cpu",

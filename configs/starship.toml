@@ -1,8 +1,9 @@
 palette = "noctalia"
+scan_timeout = 120
 
 # Format Layout (Pawlette Standard Order: Who -> Where -> Git Context -> Proxy)
 format = """\
-[╭╴](fg:magenta)\
+[╭╴](fg:cyan)\
 $os\
 $username\
 (\
@@ -19,19 +20,19 @@ $cmd_duration${custom.proxy}\
     $rust\
     $java\
 )
-[╰─](fg:magenta)$character\
+[╰─](fg:cyan)$character\
 """
 
 # Enable blank line between commands
 add_newline = true
 
 [character]
-success_symbol = "[󰍟](fg:magenta)"
+success_symbol = "[󰍟](fg:cyan)"
 error_symbol = "[󰍟](fg:red)"
 
 [os]
 format = "[$symbol]($style)"
-style = "bold magenta"
+style = "bold cyan"
 disabled = false
 
 [os.symbols]
@@ -53,18 +54,18 @@ Ubuntu = " "
 Windows = " "
 
 [username]
-style_user = "bold magenta"
+style_user = "bold cyan"
 style_root = "bold red"
 format = "[$user]($style) "
 disabled = false
 show_always = true
 
 [directory]
-format = "[$path](bold fg:magenta)[$read_only]($read_only_style) "
+format = "[$path](bold fg:cyan)[$read_only]($read_only_style) "
 truncation_length = 2
-style = "fg:magenta"
-read_only_style = "fg:magenta"
-before_repo_root_style = "fg:magenta"
+style = "fg:cyan"
+read_only_style = "fg:coral"
+before_repo_root_style = "fg:cyan"
 truncation_symbol = "…/"
 truncate_to_repo = true
 read_only = "  "
@@ -84,7 +85,20 @@ style = "bold fg:cyan"
 symbol = " "
 
 [git_status]
-disabled = true
+disabled = false
+format = "([$all_status$ahead_behind]($style) )"
+style = "bold fg:yellow"
+conflicted = "!"
+ahead = "⇡${count}"
+behind = "⇣${count}"
+diverged = "⇕${ahead_count}${behind_count}"
+up_to_date = ""
+untracked = "?"
+modified = "!"
+staged = "+"
+renamed = "»"
+deleted = "✘"
+stashed = "≡"
 
 [docker_context]
 disabled = false
@@ -130,7 +144,7 @@ disabled = false
 
 [rust]
 format = "[$symbol$version]($style) "
-style = "bold fg:magenta"
+style = "bold fg:coral"
 symbol = " "
 version_format = "${raw}"
 disabled = false
@@ -147,40 +161,41 @@ format = "[󰲝 $output]($style) "
 
 [palettes.noctalia]
 # Standard colors
-blue      = "#feacef"
-red       = "#ffb4ab"
-green     = "#c4c0ff"
-yellow    = "#c6c3e9"
-cyan      = "#c6c3e9"
-magenta   = "#c4c0ff"
-white     = "#e5e1e9"
-black     = "#474551"
+blue      = "#62d8e7"
+red       = "#ff9f8e"
+green     = "#7fe7f3"
+yellow    = "#f2c66d"
+cyan      = "#a9bdc4"
+magenta   = "#ffb3a5"
+coral     = "#ff9f8e"
+white     = "#e6f1f4"
+black     = "#0a0f14"
 
 # Extended palette (Catppuccin-compatible names)
-rosewater = "#c6c3e9"
+rosewater = "#c7e8ed"
 flamingo  = "#ffb4ab"
-pink      = "#c4c0ff"
-mauve     = "#c4c0ff"
+pink      = "#ffb3a5"
+mauve     = "#62d8e7"
 maroon    = "#ffb4ab"
-peach     = "#c6c3e9"
-teal      = "#c6c3e9"
-sky       = "#c6c3e9"
-sapphire  = "#feacef"
-lavender  = "#c4c0ff"
+peach     = "#f2c66d"
+teal      = "#7fe7f3"
+sky       = "#a9bdc4"
+sapphire  = "#62d8e7"
+lavender  = "#c7e8ed"
 
 # Text shades
-text      = "#e5e1e9"
-subtext1  = "#e5e1e9"
-subtext0  = "#928f9c"
+text      = "#e6f1f4"
+subtext1  = "#c7e8ed"
+subtext0  = "#a9bdc4"
 
 # Surface shades
-overlay2  = "#928f9c"
-overlay1  = "#928f9c"
-overlay0  = "#474551"
-surface2  = "#474551"
-surface1  = "#474551"
-surface0  = "#131318"
-base      = "#131318"
-mantle    = "#131318"
-crust     = "#131318"
+overlay2  = "#a9bdc4"
+overlay1  = "#78929b"
+overlay0  = "#52666e"
+surface2  = "#24313b"
+surface1  = "#1b2730"
+surface0  = "#111820"
+base      = "#111820"
+mantle    = "#0a0f14"
+crust     = "#05080b"
 # <<< NOCTALIA STARSHIP PALETTE <<<

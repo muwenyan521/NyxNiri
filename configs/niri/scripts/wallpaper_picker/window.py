@@ -18,16 +18,13 @@ from gi.repository import Gtk, Gdk, GtkLayerShell, GLib, Pango
 from .physics import Spring
 from .palette import load_material_palette
 from .lock import release_instance_lock
-from .config import (
-    WIN_WIDTH, WIN_HEIGHT, WIN_RADIUS,
-    GRID_COLS, CARD_WIDTH, CARD_HEIGHT, THUMB_HEIGHT,
-    GAP_X, GAP_Y, GRID_VIEWPORT_Y, GRID_VIEWPORT_H
-)
+from .config import WIN_WIDTH, WIN_HEIGHT
+from nyxui.layout import calculate_grid_metrics
 from .scanner import WallpaperScanner
 from .backend import apply_wallpaper, apply_random_wallpaper
 from .renderer import (
     draw_dialog_container, draw_header,
-    draw_category_chips, draw_card, draw_scrollbar
+    draw_category_chips, draw_card, draw_scrollbar, draw_empty_state
 )
 
 
@@ -40,6 +37,7 @@ class WallpaperPickerWindow(Gtk.Window):
         self.lock_fd = lock_fd
         self.pid_path = pid_path
         self.palette = load_material_palette()
+        self.metrics = calculate_grid_metrics(1920.0, 1080.0)
 
         # Scanner and data
         self.scanner = WallpaperScanner(on_thumb_ready_cb=self.on_thumb_ready)
@@ -180,6 +178,7 @@ class WallpaperPickerWindow(Gtk.Window):
         if self.cursor_timer_id is not None:
             GLib.source_remove(self.cursor_timer_id)
             self.cursor_timer_id = None
+        self.scanner.shutdown()
         release_instance_lock(self.lock_fd, self.pid_path)
         self.lock_fd = None
         self.hide()
@@ -241,29 +240,34 @@ class WallpaperPickerWindow(Gtk.Window):
 
     def select_and_apply(self, item):
         """Apply selected wallpaper in background thread and dismiss immediately."""
+        self._suppress_hover = True
+        self.hovered_card_idx = None
+        self.hover_cat_idx = None
         self.dismiss_window()
         threading.Thread(target=apply_wallpaper, args=(item,), daemon=False).start()
 
     def get_max_scroll_y(self) -> float:
         """Calculate maximum vertical scroll offset for current item collection."""
         items = self.get_current_items()
-        total_rows = math.ceil(len(items) / GRID_COLS)
-        total_h = total_rows * (CARD_HEIGHT + GAP_Y)
-        return max(0.0, total_h - GRID_VIEWPORT_H + 16.0)
+        metrics = self.metrics
+        total_rows = math.ceil(len(items) / metrics.columns)
+        total_h = total_rows * (metrics.card_height + metrics.gap_y)
+        return max(0.0, total_h - metrics.grid_height + 16.0)
 
     def scroll_to_make_visible(self, item_idx: int):
         """Adjust target_scroll_y to ensure the focused card is visible within the viewport."""
-        row = item_idx // GRID_COLS
-        card_top = row * (CARD_HEIGHT + GAP_Y)
-        card_bottom = card_top + CARD_HEIGHT
+        metrics = self.metrics
+        row = item_idx // metrics.columns
+        card_top = row * (metrics.card_height + metrics.gap_y)
+        card_bottom = card_top + metrics.card_height
 
         curr_view_top = self.target_scroll_y
-        curr_view_bottom = curr_view_top + GRID_VIEWPORT_H
+        curr_view_bottom = curr_view_top + metrics.grid_height
 
         if card_top < curr_view_top:
             self.target_scroll_y = card_top
         elif card_bottom > curr_view_bottom:
-            self.target_scroll_y = card_bottom - GRID_VIEWPORT_H + 16.0
+            self.target_scroll_y = card_bottom - metrics.grid_height + 16.0
 
         max_scroll = self.get_max_scroll_y()
         self.target_scroll_y = max(0.0, min(max_scroll, self.target_scroll_y))
@@ -282,8 +286,10 @@ class WallpaperPickerWindow(Gtk.Window):
         alpha = t * t * (3.0 - 2.0 * t)
         scale = 0.96 + 0.04 * t
 
-        dialog_w = min(WIN_WIDTH, win_w - 40.0)
-        dialog_h = min(WIN_HEIGHT, win_h - 40.0)
+        self.metrics = calculate_grid_metrics(win_w, win_h)
+        metrics = self.metrics
+        dialog_w = metrics.dialog_width
+        dialog_h = metrics.dialog_height
         dialog_x = (win_w - dialog_w) / 2.0
         dialog_y = (win_h - dialog_h) / 2.0 + (1.0 - t) * 12.0
 
@@ -295,7 +301,7 @@ class WallpaperPickerWindow(Gtk.Window):
         cr.push_group()
 
         # Dialog Frosted Glass Container with Multi-Tier Diffuse Shadow
-        draw_dialog_container(cr, dialog_x, dialog_y, dialog_w, dialog_h, WIN_RADIUS, self.palette)
+        draw_dialog_container(cr, dialog_x, dialog_y, dialog_w, dialog_h, metrics.radius, self.palette)
 
         # Top Header & Pro-Grade Search Pill
         all_count = len(self.scanner.items)
@@ -317,7 +323,7 @@ class WallpaperPickerWindow(Gtk.Window):
             self.im_context.set_cursor_location(rect)
 
         # Category Chips
-        chips_y = dialog_y + 70.0
+        chips_y = dialog_y + 68.0
         self.chip_boxes = draw_category_chips(
             cr, dialog_x, chips_y, dialog_w,
             categories=self.scanner.categories,
@@ -328,10 +334,10 @@ class WallpaperPickerWindow(Gtk.Window):
         )
 
         # Continuous Scrollable Card Grid
-        grid_x = dialog_x + 32.0
-        grid_y = dialog_y + GRID_VIEWPORT_Y
-        grid_w = dialog_w - 64.0
-        grid_h = GRID_VIEWPORT_H
+        grid_x = dialog_x + metrics.grid_x
+        grid_y = dialog_y + metrics.grid_y
+        grid_w = metrics.grid_width
+        grid_h = metrics.grid_height
 
         scroll_y = self.scroll_spring.current
         items = self.get_current_items()
@@ -344,16 +350,31 @@ class WallpaperPickerWindow(Gtk.Window):
 
         self.card_boxes = []
 
-        for idx, item in enumerate(items):
-            row = idx // GRID_COLS
-            col = idx % GRID_COLS
-            cx = grid_x + col * (CARD_WIDTH + GAP_X)
-            cy = grid_y + 8.0 + row * (CARD_HEIGHT + GAP_Y) - scroll_y
+        if not items:
+            if self.search_query.strip():
+                empty_title = "No wallpapers match"
+                empty_body = "Try a different search or clear the filter."
+            elif not self.scanner.items:
+                empty_title = "No wallpapers found"
+                empty_body = "Add images or videos to your wallpaper folder, then reopen this picker."
+            else:
+                empty_title = "Nothing in this category"
+                empty_body = "Choose another category or add a matching wallpaper."
+            draw_empty_state(
+                cr, grid_x, grid_y, grid_w, grid_h, empty_title, empty_body,
+                self.palette, self.create_pango_layout,
+            )
 
-            self.card_boxes.append((cx, cy, CARD_WIDTH, CARD_HEIGHT))
+        for idx, item in enumerate(items):
+            row = idx // metrics.columns
+            col = idx % metrics.columns
+            cx = grid_x + col * (metrics.card_width + metrics.gap_x)
+            cy = grid_y + 8.0 + row * (metrics.card_height + metrics.gap_y) - scroll_y
+
+            self.card_boxes.append((cx, cy, metrics.card_width, metrics.card_height))
 
             # Render visible cards
-            if cy + CARD_HEIGHT >= grid_y - 20.0 and cy <= grid_y + grid_h + 20.0:
+            if cy + metrics.card_height >= grid_y - 20.0 and cy <= grid_y + grid_h + 20.0:
                 is_cur = (item.path == self.current_wp_path)
                 is_active = (self.keyboard_selected_idx == idx)
                 is_hover = (self.hovered_card_idx == idx)
@@ -364,7 +385,7 @@ class WallpaperPickerWindow(Gtk.Window):
                 hover_val = self.card_springs[idx].current if idx in self.card_springs else 0.0
 
                 draw_card(
-                    cr, cx, cy, CARD_WIDTH, CARD_HEIGHT, item,
+                    cr, cx, cy, metrics.card_width, metrics.card_height, item,
                     is_active=is_active,
                     is_hovered=is_hover,
                     is_current=is_cur,
@@ -417,13 +438,16 @@ class WallpaperPickerWindow(Gtk.Window):
         new_hover_card = None
         items = self.get_current_items()
         for idx, (bx, by, bw, bh) in enumerate(self.card_boxes):
-            if idx < len(items) and bx <= mx <= bx + bw and by <= my <= by + bh:
+            if idx < len(items) and self._hit_test_card(mx, my, bx, by, bw, bh):
                 new_hover_card = idx
                 break
 
         if new_hover_card != self.hovered_card_idx:
             self.hovered_card_idx = new_hover_card
             self._request_frame()
+
+    def _hit_test_card(self, mx, my, bx, by, bw, bh):
+        return bx <= mx <= bx + bw and by - 8.0 <= my <= by + bh + 8.0
 
     def _update_hover_from_pointer(self):
         if self.is_dismissing or self._suppress_hover:
@@ -501,15 +525,16 @@ class WallpaperPickerWindow(Gtk.Window):
             # 4. Clicked card
             items = self.get_current_items()
             for idx, (bx, by, bw, bh) in enumerate(self.card_boxes):
-                if idx < len(items) and bx <= mx <= bx + bw and by <= my <= by + bh:
+                if idx < len(items) and self._hit_test_card(mx, my, bx, by, bw, bh):
                     self.select_and_apply(items[idx])
                     return True
 
             # 5. Clicked outside dialog -> dismiss
             win_w = self.get_allocated_width() or 1920
             win_h = self.get_allocated_height() or 1080
-            dialog_w = min(WIN_WIDTH, win_w - 40.0)
-            dialog_h = min(WIN_HEIGHT, win_h - 40.0)
+            metrics = calculate_grid_metrics(win_w, win_h)
+            dialog_w = metrics.dialog_width
+            dialog_h = metrics.dialog_height
             dialog_x = (win_w - dialog_w) / 2.0
             dialog_y = (win_h - dialog_h) / 2.0
             if not (dialog_x <= mx <= dialog_x + dialog_w and dialog_y <= my <= dialog_y + dialog_h):
@@ -597,6 +622,21 @@ class WallpaperPickerWindow(Gtk.Window):
                 self.keyboard_selected_idx = 0
                 self._request_frame()
                 return True
+            elif keyval in (Gdk.KEY_a, Gdk.KEY_A):
+                self.cursor_idx = 0
+                self._request_frame()
+                return True
+            elif keyval in (Gdk.KEY_e, Gdk.KEY_E):
+                self.cursor_idx = len(self.search_query)
+                self._request_frame()
+                return True
+            elif keyval in (Gdk.KEY_l, Gdk.KEY_L):
+                self.search_query = ""
+                self.cursor_idx = 0
+                self.target_scroll_y = 0.0
+                self.keyboard_selected_idx = 0
+                self._request_frame()
+                return True
             elif keyval in (Gdk.KEY_w, Gdk.KEY_W):
                 before = self.search_query[:self.cursor_idx]
                 after = self.search_query[self.cursor_idx:]
@@ -633,7 +673,7 @@ class WallpaperPickerWindow(Gtk.Window):
             if self.keyboard_selected_idx is None:
                 self.keyboard_selected_idx = 0
             else:
-                col = self.keyboard_selected_idx % GRID_COLS
+                col = self.keyboard_selected_idx % self.metrics.columns
                 if col > 0 and self.keyboard_selected_idx - 1 >= 0:
                     self.keyboard_selected_idx -= 1
             self.scroll_to_make_visible(self.keyboard_selected_idx)
@@ -652,8 +692,8 @@ class WallpaperPickerWindow(Gtk.Window):
             if self.keyboard_selected_idx is None:
                 self.keyboard_selected_idx = 0
             else:
-                col = self.keyboard_selected_idx % GRID_COLS
-                if col < GRID_COLS - 1 and self.keyboard_selected_idx + 1 < num_items:
+                col = self.keyboard_selected_idx % self.metrics.columns
+                if col < self.metrics.columns - 1 and self.keyboard_selected_idx + 1 < num_items:
                     self.keyboard_selected_idx += 1
             self.scroll_to_make_visible(self.keyboard_selected_idx)
             self._request_frame()
@@ -682,6 +722,17 @@ class WallpaperPickerWindow(Gtk.Window):
 
         # 5. Backspace & Delete at Cursor Index
         if keyval == Gdk.KEY_BackSpace:
+            if ctrl:
+                before = self.search_query[:self.cursor_idx]
+                after = self.search_query[self.cursor_idx:]
+                words = before.rstrip().rsplit(None, 1)
+                new_before = words[0] if len(words) > 1 else ""
+                self.cursor_idx = len(new_before)
+                self.search_query = new_before + after
+                self.target_scroll_y = 0.0
+                self.keyboard_selected_idx = 0
+                self._request_frame()
+                return True
             if self.cursor_idx > 0:
                 self.cursor_time = 0.0
                 self.search_query = self.search_query[:self.cursor_idx - 1] + self.search_query[self.cursor_idx:]
@@ -720,8 +771,8 @@ class WallpaperPickerWindow(Gtk.Window):
                 return True
             if self.keyboard_selected_idx is None:
                 self.keyboard_selected_idx = 0
-            elif self.keyboard_selected_idx + GRID_COLS < num_items:
-                self.keyboard_selected_idx += GRID_COLS
+            elif self.keyboard_selected_idx + self.metrics.columns < num_items:
+                self.keyboard_selected_idx += self.metrics.columns
             else:
                 self.keyboard_selected_idx = num_items - 1
             self.scroll_to_make_visible(self.keyboard_selected_idx)
@@ -732,10 +783,25 @@ class WallpaperPickerWindow(Gtk.Window):
                 return True
             if self.keyboard_selected_idx is None:
                 self.keyboard_selected_idx = 0
-            elif self.keyboard_selected_idx >= GRID_COLS:
-                self.keyboard_selected_idx -= GRID_COLS
+            elif self.keyboard_selected_idx >= self.metrics.columns:
+                self.keyboard_selected_idx -= self.metrics.columns
             else:
                 self.keyboard_selected_idx = 0
+            self.scroll_to_make_visible(self.keyboard_selected_idx)
+            self._request_frame()
+            return True
+
+        if keyval in (Gdk.KEY_Page_Up, Gdk.KEY_Page_Down):
+            if num_items == 0:
+                return True
+            visible_rows = max(1, int(self.metrics.grid_height // (self.metrics.card_height + self.metrics.gap_y)))
+            if self.keyboard_selected_idx is None:
+                self.keyboard_selected_idx = 0
+            delta = visible_rows * self.metrics.columns
+            if keyval == Gdk.KEY_Page_Up:
+                self.keyboard_selected_idx = max(0, self.keyboard_selected_idx - delta)
+            else:
+                self.keyboard_selected_idx = min(num_items - 1, self.keyboard_selected_idx + delta)
             self.scroll_to_make_visible(self.keyboard_selected_idx)
             self._request_frame()
             return True

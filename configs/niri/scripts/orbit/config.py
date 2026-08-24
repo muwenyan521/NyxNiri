@@ -7,6 +7,8 @@ import os
 import sys
 import json
 
+from nyxui.tokens import token
+
 try:
     import tomllib
     HAS_TOMLLIB = True
@@ -18,13 +20,12 @@ except ImportError:
         HAS_TOMLLIB = False
 
 # ── Geometry & Physical Constants ─────────────────────────────────────────────
-BASE_ORBIT_RADIUS = 168.0   # Golden ratio orbital radius (+16% breathing space)
-DEADZONE_RADIUS = 48.0      # Calibrated deadzone radius (r < 48px: center hub focus)
-HYSTERESIS_DEG = 6.0        # Angular hysteresis margin (±6° entry threshold)
-FLOAT_SPRING = 16.0         # Radial outward displacement on activation (+16px)
-
-CAPSULE_IDLE_H = 48.0       # Idle capsule height (px)
-CAPSULE_ACTIVE_H = 54.0     # Active capsule height (px)
+BASE_ORBIT_RADIUS = float(token("orbit", "base_radius", 168.0))
+DEADZONE_RADIUS = float(token("orbit", "deadzone_radius", 48.0))
+HYSTERESIS_DEG = float(token("orbit", "hysteresis_deg", 6.0))
+FLOAT_SPRING = float(token("orbit", "float_spring", 16.0))
+CAPSULE_IDLE_H = float(token("orbit", "capsule_idle_height", 48.0))
+CAPSULE_ACTIVE_H = float(token("orbit", "capsule_active_height", 54.0))
 
 # Config Search Paths (Prioritized)
 CONFIG_PATHS = [
@@ -128,6 +129,70 @@ DEFAULT_MENU_TREE = [
         "cmd": "~/.config/niri/scripts/wallpaper-picker.py",
         "shortcut": "4",
         "color_key": "secondary",
+    },
+    {
+        "id": "workspace-tools",
+        "name": "Workspace Tools",
+        "desc": "Folder · 6 Tools",
+        "icon": "󰘳",
+        "shortcut": "5",
+        "color_key": "primary",
+        "children": [
+            {
+                "id": "yazi",
+                "name": "Yazi",
+                "desc": "File Manager",
+                "icon": "󰉋",
+                "cmd": "kitty --title NyxYazi fish -lc 'if functions -q y; y; else; yazi; end'",
+                "shortcut": "1",
+                "color_key": "primary",
+            },
+            {
+                "id": "btop",
+                "name": "btop",
+                "desc": "System Monitor",
+                "icon": "󰍛",
+                "cmd": "kitty --title NyxMonitor btop",
+                "shortcut": "2",
+                "color_key": "tertiary",
+            },
+            {
+                "id": "fastfetch",
+                "name": "Fastfetch",
+                "desc": "System Snapshot",
+                "icon": "󰋼",
+                "cmd": "kitty --title NyxFetch fastfetch",
+                "shortcut": "3",
+                "color_key": "secondary",
+            },
+            {
+                "id": "disk",
+                "name": "Disk Usage",
+                "desc": "Mounted Disks",
+                "icon": "󰋊",
+                "cmd": "kitty --title NyxDisk fish -lc 'disk; read -P \"Press Enter to close\"'",
+                "shortcut": "4",
+                "color_key": "tertiary",
+            },
+            {
+                "id": "mpv-nyx",
+                "name": "Nyx MPV",
+                "desc": "Media Player Profile",
+                "icon": "󰐹",
+                "cmd": "kitty --title NyxMPV ~/.config/mpv-nyx/run.sh",
+                "shortcut": "5",
+                "color_key": "primary",
+            },
+            {
+                "id": "nvim-nyx",
+                "name": "Nyx Nvim",
+                "desc": "Editor Profile",
+                "icon": "",
+                "cmd": "kitty --title NyxNvim env NVIM_APPNAME=nvim-nyx nvim",
+                "shortcut": "6",
+                "color_key": "secondary",
+            },
+        ],
     },
 ]
 

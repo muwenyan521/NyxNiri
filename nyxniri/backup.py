@@ -58,7 +58,7 @@ def get_backup_base_dir() -> Path:
 
 def backup_configs(note: str = "", interactive: bool = True) -> Optional[Path]:
     """Create a complete snapshot of all active dotfiles configurations."""
-    from nyxniri.deploy import discover_config_items
+    from nyxniri.deploy import config_destination, discover_config_items, managed_bin_sources
 
     env = get_env()
     base_dir = get_backup_base_dir()
@@ -77,7 +77,15 @@ def backup_configs(note: str = "", interactive: bool = True) -> Optional[Path]:
 
     items = discover_config_items()
     for item in items:
-        cfg_path = env.config_dir / item
+        cfg_path = config_destination(item)
+        if item == "bin":
+            target = tmp_dir / item
+            target.mkdir(parents=True, exist_ok=True)
+            for source in managed_bin_sources():
+                current = cfg_path / source.name
+                if current.is_file() or current.is_symlink():
+                    _copy_path(current, target / source.name)
+            continue
         if cfg_path.exists() or cfg_path.is_symlink():
             target = tmp_dir / item
             _copy_path(cfg_path, target)
@@ -172,7 +180,7 @@ def list_backups() -> List[Path]:
 
 def rollback_configs(target_arg: str = "") -> bool:
     """Restore configuration from a selected historical snapshot."""
-    from nyxniri.deploy import atomic_replace_item, discover_config_items
+    from nyxniri.deploy import atomic_replace_item, config_destination, discover_config_items, managed_bin_sources
 
     backups = list_backups()
     if not backups:
@@ -209,7 +217,13 @@ def rollback_configs(target_arg: str = "") -> bool:
     items = discover_config_items()
     for item in items:
         snap_item = chosen_backup / item
-        dest_item = env.config_dir / item
+        dest_item = config_destination(item)
+        if item == "bin" and snap_item.is_dir():
+            dest_item.mkdir(parents=True, exist_ok=True)
+            for source in snap_item.iterdir():
+                if not atomic_replace_item(source, dest_item / source.name):
+                    return False
+            continue
         if snap_item.exists() or snap_item.is_symlink():
             if not atomic_replace_item(snap_item, dest_item):
                 print(msg("log_deploy_config_failed", item), file=sys.stderr)
@@ -288,7 +302,7 @@ def delete_backup(target_arg: str = "") -> bool:
 
 def uninstall_nyxniri(mode: str = "") -> bool:
     """Safely uninstall NyxNiri or deep purge configurations and cache."""
-    from nyxniri.deploy import discover_config_items
+    from nyxniri.deploy import config_destination, discover_config_items, managed_bin_sources
     from nyxniri.fcitx import fcitx_uninstall
     from nyxniri.greeter import greeter_uninstall
 
@@ -330,7 +344,11 @@ def uninstall_nyxniri(mode: str = "") -> bool:
             pass
 
         for item in items:
-            p = env.config_dir / item
+            p = config_destination(item)
+            if item == "bin":
+                for source in managed_bin_sources():
+                    (p / source.name).unlink(missing_ok=True)
+                continue
             if p.exists() or p.is_symlink():
                 _remove_path(p)
                 print(msg("log_remove_item", item))
@@ -367,7 +385,14 @@ def uninstall_nyxniri(mode: str = "") -> bool:
     archive_dir.mkdir(parents=True, exist_ok=True)
 
     for item in items:
-        p = env.config_dir / item
+        p = config_destination(item)
+        if item == "bin":
+            for source in managed_bin_sources():
+                current = p / source.name
+                if current.is_file() or current.is_symlink():
+                    _copy_path(current, archive_dir / item / source.name)
+                    _remove_path(current)
+            continue
         if p.exists() or p.is_symlink():
             target = archive_dir / item
             _copy_path(p, target)
