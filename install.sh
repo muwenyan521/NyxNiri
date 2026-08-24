@@ -68,7 +68,7 @@ engine_is_complete() {
     local target_dir="$1"
     local module
     [ -f "$target_dir/install.sh" ] || return 1
-    for module in __init__ __main__ backup cli constants core deploy deps doctor fcitx greeter i18n network tui; do
+    for module in __init__ __main__ backup cli constants core deploy deps doctor fcitx greeter gtktheme i18n network tui; do
         [ -f "$target_dir/nyxniri/$module.py" ] || return 1
     done
     [ -f "$target_dir/configs/niri/config.kdl" ] \
@@ -159,9 +159,9 @@ main() {
     else
         echo -e "\e[1;34m:: Updating cache repository…\e[0m" >&2
         if [ -t 2 ]; then
-            git -C "$CACHE_DIR" pull --ff-only --progress || cache_update_failed=1
+            git -c http.lowSpeedTime=15 -c http.lowSpeedLimit=1000 -C "$CACHE_DIR" pull --ff-only --progress || cache_update_failed=1
         else
-            git -C "$CACHE_DIR" pull --ff-only --quiet >/dev/null 2>&1 || cache_update_failed=1
+            git -c http.lowSpeedTime=15 -c http.lowSpeedLimit=1000 -C "$CACHE_DIR" pull --ff-only --quiet >/dev/null 2>&1 || cache_update_failed=1
         fi
         if [ "${cache_update_failed:-0}" -eq 1 ]; then
             echo -e "\e[1;33m[!] Cache update failed; continuing with the last complete copy.\e[0m" >&2

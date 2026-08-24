@@ -172,8 +172,8 @@ def read_key() -> str:
             return "ENTER"
         if raw_bytes == b" ":
             return "SPACE"
-        if raw_bytes in (b"\x03", b"\x04"):  # Ctrl+C / Ctrl+D
-            return "CTRL_C"
+        if raw_bytes in (b"\x03", b"\x04"):  # Ctrl+C / Ctrl+D — both exit
+            return "EXIT"
 
         # 5. Normal UTF-8 single character
         try:
@@ -369,7 +369,7 @@ class Menu:
                     return int(key) - 1
                 elif key in ("0", "q", "Q"):
                     return max_idx
-                elif key in ("ESC", "CTRL_C"):
+                elif key in ("ESC", "EXIT"):
                     return max_idx
         finally:
             sys.stdout.write(Colors.CURSOR_SHOW)
@@ -457,7 +457,7 @@ class CheckboxList:
                     for e in self.entries:
                         if not e.is_separator:
                             e.checked = False
-                elif key in ("0", "q", "Q", "ESC", "CTRL_C"):
+                elif key in ("0", "q", "Q", "ESC", "EXIT"):
                     return None
                 elif key.isdigit():
                     num = int(key) - 1
@@ -512,7 +512,7 @@ def select_language() -> str:
                 set_lang(chosen)
                 clear_screen()
                 return chosen
-            elif key in ("ESC", "CTRL_C"):
+            elif key in ("ESC", "EXIT"):
                 sys.exit(130)
     finally:
         sys.stdout.write(Colors.CURSOR_SHOW)

@@ -36,17 +36,18 @@ atomic_update_ini() {
 
     local key_found=0
     local has_settings_header=0
+    # Escape regex special chars in key for the [[ =~ ]] match below.
+    local escaped_key
+    escaped_key=$(printf '%s' "$key" | sed 's/[][\.^$*+?(){}|/]/\\&/g')
 
     if [ -f "$file" ]; then
         while IFS= read -r line || [ -n "$line" ]; do
-            # Check for section header
             if [[ "$line" =~ ^\[Settings\] ]]; then
                 has_settings_header=1
                 echo "$line" >> "$tmp_file"
                 continue
             fi
-            # Match target key with optional whitespace around '='
-            if [[ "$line" =~ ^[[:space:]]*${key}[[:space:]]*= ]]; then
+            if [[ "$line" =~ ^[[:space:]]*${escaped_key}[[:space:]]*= ]]; then
                 echo "${key}=${val}" >> "$tmp_file"
                 key_found=1
             else
@@ -55,7 +56,6 @@ atomic_update_ini() {
         done < "$file"
     fi
 
-    # If key was not present in the original file, append it cleanly under [Settings]
     if [ "$key_found" -eq 0 ]; then
         if [ "$has_settings_header" -eq 0 ] && [ ! -s "$tmp_file" ]; then
             echo "[Settings]" > "$tmp_file"
@@ -102,9 +102,16 @@ fi
 if [ "$ACTION" = "toggle" ]; then
     if command -v noctalia >/dev/null 2>&1 && noctalia msg status >/dev/null 2>&1; then
         noctalia msg theme-mode-toggle 2>/dev/null || true
-        exit 0
+        # Read back the new mode so the rest of this script (gsettings broadcast,
+        # INI sync, kitty reload) runs for the toggled mode. Previously this
+        # branch exit 0'd here, leaving gsettings stale until the Noctalia hook
+        # asynchronously caught up — Chrome/Edge/Kitty dark/light lagged.
+        sleep 0.3
+        TARGET_MODE=$(noctalia msg theme-mode-get 2>/dev/null || echo "")
+        if [ "$TARGET_MODE" = "auto" ] || [ -z "$TARGET_MODE" ]; then
+            TARGET_MODE="$DEFAULT_FALLBACK_MODE"
+        fi
     else
-        # Standalone fallback toggle without Noctalia daemon
         curr_scheme="prefer-dark"
         if command -v gsettings >/dev/null 2>&1; then
             curr_scheme=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'" || echo "prefer-dark")
@@ -119,6 +126,7 @@ elif [ "$ACTION" = "dark" ] || [ "$ACTION" = "light" ]; then
     TARGET_MODE="$ACTION"
     if command -v noctalia >/dev/null 2>&1 && noctalia msg status >/dev/null 2>&1; then
         noctalia msg theme-mode-set "$ACTION" 2>/dev/null || true
+        sleep 0.2
     fi
 else
     # Derived from hook environment, Noctalia IPC, or system query
@@ -131,6 +139,8 @@ else
             curr_scheme=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'" || echo "")
             if [ "$curr_scheme" = "prefer-light" ] || [ "$curr_scheme" = "default" ]; then
                 TARGET_MODE="light"
+            elif [ -n "$curr_scheme" ]; then
+                TARGET_MODE="dark"
             else
                 TARGET_MODE="$DEFAULT_FALLBACK_MODE"
             fi
@@ -154,21 +164,37 @@ else
 fi
 
 # 6. Broadcast to GSettings / XDG Desktop Portal
+# Must run before kitty hot-reload: apps wait on this signal to switch dark/light.
+# gtk.css (M3 widget colors) is re-rendered by Noctalia itself after its palette
+# updates (~6s); we must NOT call config-reload/templates-apply here — doing so
+# races the palette update and renders with stale colors, and config-reload
+# actually slows the palette update down.
 set_system_theme "$SCHEME_VAL" "$GTK_THEME"
 
 # 7. Atomic Sync to GTK 3.0 & GTK 4.0 INI Files
+# gtk-application-prefer-dark-theme is deprecated in GTK4 (libadwaita prints a
+# warning), but Brave/Chromium reads it at startup to detect dark mode. We keep
+# writing it for both GTK3 and GTK4 — the warning is cosmetic and does not
+# affect libadwaita, which relies on portal color-scheme + @media CSS instead.
 atomic_update_ini "$HOME/.config/gtk-3.0/settings.ini" "gtk-application-prefer-dark-theme" "$DARK_PREF"
 atomic_update_ini "$HOME/.config/gtk-3.0/settings.ini" "gtk-theme-name" "$GTK_THEME"
 atomic_update_ini "$HOME/.config/gtk-4.0/settings.ini" "gtk-application-prefer-dark-theme" "$DARK_PREF"
 atomic_update_ini "$HOME/.config/gtk-4.0/settings.ini" "gtk-theme-name" "$GTK_THEME"
 
 # Clean up any legacy or stale GTK CSS overrides that break Libadwaita/Nautilus
+# Note: gtk.css is now managed by Noctalia user templates (nyxniri_gtk3/gtk4),
+# which do not contain the legacy markers below and will not be removed.
 for css_dir in "$HOME/.config/gtk-4.0" "$HOME/.config/gtk-3.0"; do
     if [ -f "$css_dir/noctalia.css" ]; then
         rm -f "$css_dir/noctalia.css" 2>/dev/null || true
     fi
     if [ -f "$css_dir/gtk.css" ] && grep -E -q "libadwaita\.css|noctalia\.css|iNiR theming" "$css_dir/gtk.css" 2>/dev/null; then
         rm -f "$css_dir/gtk.css" 2>/dev/null || true
+    fi
+    # gtk-dark.css symlink imports libadwaita.css (110 @define-color), which
+    # loads AFTER gtk.css and overwrites M3 colors. Must remove it.
+    if [ -L "$css_dir/gtk-dark.css" ]; then
+        rm -f "$css_dir/gtk-dark.css" 2>/dev/null || true
     fi
 done
 

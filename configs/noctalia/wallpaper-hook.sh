@@ -31,7 +31,7 @@ if [[ -n "$WP" && -f "$WP" && "$WP" =~ \.(mp4|webm|mkv|mov|gif)$ ]]; then
     THUMB_PATH="$THUMB_DIR/mpvpaper_thumb.jpg"
     
     # Generate thumbnail
-    if ffmpeg -y -i "$WP" -ss 00:00:01 -vframes 1 "$THUMB_PATH" 2>/dev/null; then
+    if timeout 30 ffmpeg -y -i "$WP" -ss 00:00:01 -vframes 1 "$THUMB_PATH" 2>/dev/null; then
         # Set the thumbnail as wallpaper to extract colors and provide a static background
         noctalia msg wallpaper-set "$THUMB_PATH" 2>/dev/null || true
     else

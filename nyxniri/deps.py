@@ -110,9 +110,14 @@ def ensure_aur_helper() -> Optional[str]:
         if helper:
             print(msg("aur_bootstrap_ok"))
             return helper
+        # Repo paru installed but not usable — remove before source build to avoid conflicts
+        subprocess.run(["sudo", "pacman", "-Rdd", "--noconfirm", "paru"], check=False)
 
     # 2. Source build from AUR
-    subprocess.run(["sudo", "pacman", "-S", "--needed", "--noconfirm", "base-devel", "git"], check=False)
+    res_base = subprocess.run(["sudo", "pacman", "-S", "--needed", "--noconfirm", "base-devel", "git"], check=False)
+    if res_base.returncode != 0:
+        print(msg("aur_bootstrap_failed"))
+        return None
     print(msg("aur_bootstrap_source"))
 
     build_dir = Path(tempfile.mkdtemp())
@@ -133,26 +138,64 @@ def ensure_aur_helper() -> Optional[str]:
     return None
 
 def check_mpvpaper_leak() -> None:
-    """Check mpvpaper version for the OpenGL memory leak bug (< 1.9)."""
+    """Check mpvpaper version for the OpenGL memory leak bug (< 1.9) and offer upgrade."""
+    if not shutil.which("pacman"):
+        return
+    env = {**os.environ, "LC_ALL": "C"}
+
+    # Already on git version?
+    res_git = subprocess.run(["pacman", "-Qi", "mpvpaper-git"], capture_output=True, text=True, check=False, env=env)
+    if res_git.returncode == 0:
+        git_ver = ""
+        for line in res_git.stdout.splitlines():
+            if line.startswith("Version"):
+                git_ver = line.split(":", 1)[1].strip()
+                break
+        print(msg("mpvpaper_version_ok", f"git ({git_ver or 'unknown'})"))
+        return
+
     if not shutil.which("mpvpaper"):
         return
+
+    print(msg("checking_mpvpaper"))
+    res = subprocess.run(["pacman", "-Qi", "mpvpaper"], capture_output=True, text=True, check=False, env=env)
+    version = ""
+    for line in res.stdout.splitlines():
+        if line.startswith("Version"):
+            version = line.split(":", 1)[1].strip()
+            break
+    if not version:
+        return
+
+    # Strip epoch and pkgrel: "1:1.8.2-3" → "1.8.2"
+    clean_ver = re.sub(r'^[0-9]+:', '', version)
+    clean_ver = re.sub(r'-.*$', '', clean_ver)
+    clean_ver = re.sub(r'[^0-9.]', '', clean_ver)
+    parts = clean_ver.split(".")
     try:
-        res = subprocess.run(["mpvpaper", "--version"], capture_output=True, text=True, check=False)
-        out = res.stdout or res.stderr
-        m = re.search(r"mpvpaper\s+v?([0-9]+(?:\.[0-9]+)+)", out)
-        if m:
-            ver_str = m.group(1)
-            try:
-                parts = tuple(int(p) for p in ver_str.split("."))
-                if parts < (1, 9):
-                    print(msg("mpvpaper_leak_warn", ver_str))
-                    print(msg("mpvpaper_upgrade_skip"))
+        major = int(parts[0]) if parts and parts[0].isdigit() else 0
+        minor = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+    except ValueError:
+        return
+
+    if major > 1 or (major == 1 and minor >= 9):
+        print(msg("mpvpaper_version_ok", version))
+    else:
+        print(msg("mpvpaper_leak_warn", version))
+        if prompt_confirm("mpvpaper_upgrade_prompt", "n"):
+            mgr = aur_helper_usable()
+            if not mgr:
+                mgr = ensure_aur_helper()
+            if mgr:
+                res_inst = subprocess.run([mgr, "-S", "--noconfirm", "mpvpaper-git"], check=False)
+                if res_inst.returncode == 0:
+                    print(msg("mpvpaper_upgrade_done"))
                 else:
-                    print(msg("mpvpaper_version_ok", ver_str))
-            except ValueError:
-                pass
-    except Exception:
-        pass
+                    print(msg("err_mpvpaper_git_failed"))
+            else:
+                print(msg("mpvpaper_upgrade_skip"))
+        else:
+            print(msg("mpvpaper_upgrade_skip"))
 
 def install_selected_deps(selected_deps: List[str]) -> bool:
     """Install selected packages using pacman or AUR helper."""
@@ -163,7 +206,8 @@ def install_selected_deps(selected_deps: List[str]) -> bool:
     aur_pkgs = [pkg for pkg in selected_deps if pkg in AUR_DEPS]
 
     if repo_pkgs:
-        cmd = ["sudo", "pacman", "-S", "--needed", "--noconfirm", *repo_pkgs]
+        pkg_mgr = get_preferred_pkg_manager()
+        cmd = [*pkg_mgr, "-S", "--needed", "--noconfirm", *repo_pkgs]
         print(msg("installing_official_packages", " ".join(repo_pkgs)))
         res = subprocess.run(cmd, check=False)
         if res.returncode != 0:
@@ -179,8 +223,9 @@ def install_selected_deps(selected_deps: List[str]) -> bool:
                 print(msg("log_aur_pkgs_partial_fail"))
         else:
             print(msg("aur_skip", ", ".join(aur_pkgs)))
+            print(msg("aur_helper_required"))
 
-    if "mpvpaper" in selected_deps:
+    if "mpvpaper" in selected_deps or shutil.which("mpvpaper"):
         check_mpvpaper_leak()
 
     return True
@@ -205,6 +250,54 @@ def run_dep_menu_loop() -> None:
         print(msg("installing_selected"))
         install_selected_deps(chosen)
 
+_OPT_APP_PKG_MAP = {
+    "nautilus": {"repo": ["nautilus"], "aur": []},
+    "missioncenter": {"repo": ["mission-center"], "aur": []},
+    "fcitx5-rime": {"repo": ["fcitx5", "fcitx5-gtk", "fcitx5-qt", "fcitx5-configtool", "fcitx5-rime"], "aur": ["rime-ice-git"]},
+}
+
+
+def install_optional_apps(selected_apps: List[str]) -> None:
+    """Install selected optional apps with correct package name mapping."""
+    repo_pkgs: List[str] = []
+    aur_pkgs: List[str] = []
+    has_fcitx = False
+    for app in selected_apps:
+        mapping = _OPT_APP_PKG_MAP.get(app)
+        if not mapping:
+            continue
+        repo_pkgs.extend(mapping["repo"])
+        aur_pkgs.extend(mapping["aur"])
+        if app == "fcitx5-rime":
+            has_fcitx = True
+
+    if not repo_pkgs and not aur_pkgs:
+        print(msg("opt_apps_none_selected"))
+        return
+
+    print(msg("installing_selected_apps"))
+    pkg_mgr = get_preferred_pkg_manager()
+
+    if repo_pkgs:
+        subprocess.run([*pkg_mgr, "-S", "--needed", "--noconfirm", *repo_pkgs], check=False)
+
+    if aur_pkgs:
+        helper = aur_helper_usable()
+        if not helper:
+            helper = ensure_aur_helper()
+        if helper:
+            subprocess.run([helper, "-S", "--needed", "--noconfirm", *aur_pkgs], check=False)
+
+    if has_fcitx and shutil.which("fcitx5"):
+        try:
+            from nyxniri.fcitx import fcitx_install
+            fcitx_install()
+        except Exception:
+            pass
+
+    print(msg("opt_apps_install_done"))
+
+
 def run_optional_apps_menu_loop() -> None:
     """Open interactive checkbox list for recommended applications."""
     if not sys.stdin.isatty():
@@ -222,8 +315,6 @@ def run_optional_apps_menu_loop() -> None:
     chk = CheckboxList("opt_apps_menu_title", entries, hint_key="opt_apps_menu_hint")
     chosen = chk.run()
     if chosen:
-        print(msg("installing_selected_apps"))
-        install_selected_deps(chosen)
-        print(msg("opt_apps_install_done"))
+        install_optional_apps(chosen)
     else:
         print(msg("opt_apps_none_selected"))

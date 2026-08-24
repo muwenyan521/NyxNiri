@@ -1,22 +1,25 @@
 """
 NyxNiri Wallpaper Picker Scanner Engine
-Recursive directory traversal, asynchronous thumbnail generation, pre-rendered Cairo surface caching, and active wallpaper detection.
+Recursive directory traversal, asynchronous thumbnail generation, and active wallpaper detection.
+
+Thumbnails are kept on disk only; no pixbuf/cairo surface is held in memory.
+The UI reads thumb_path lazily via CSS background-image, so off-screen cards
+cost nothing and releasing happens automatically when the card scrolls away.
 """
 
 import os
 import sys
 import hashlib
 import subprocess
+import uuid
 from concurrent.futures import ThreadPoolExecutor
-import cairo
 import gi
-gi.require_version("Gdk", "3.0")
+gi.require_version("GLib", "2.0")
 gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import GLib, Gdk, GdkPixbuf
+from gi.repository import GLib, GdkPixbuf
 
 from .config import (
     STATIC_EXTENSIONS, VIDEO_EXTENSIONS, ALL_SUPPORTED_EXTENSIONS,
-    CARD_WIDTH, THUMB_HEIGHT, CARD_RADIUS,
     CACHE_DIR, get_wallpaper_search_roots
 )
 
@@ -44,13 +47,11 @@ class WallpaperItem:
         raw_key = f"{self.path}:{self.mtime}:{self.size}".encode("utf-8")
         self.hash_id = hashlib.md5(raw_key).hexdigest()
         self.thumb_path = os.path.join(CACHE_DIR, f"{self.hash_id}.jpg")
-        self.pixbuf = None
-        self.surface = None
         self.is_loading = False
 
 
 class WallpaperScanner:
-    """Manages wallpaper discovery, category grouping, and thumbnail background extraction with Cairo surface caching."""
+    """Manages wallpaper discovery, category grouping, and on-disk thumbnail generation."""
 
     def __init__(self, on_thumb_ready_cb=None):
         self.on_thumb_ready_cb = on_thumb_ready_cb
@@ -116,81 +117,31 @@ class WallpaperScanner:
             if item.category in self.category_items and item.category not in ("All", "Static", "Live"):
                 self.category_items[item.category].append(item)
 
-        # Pre-warm first 6 items
+        # Pre-warm first 6 items so the first paint has thumbnails
         for it in self.items[:6]:
             self._ensure_thumbnail(it)
 
         return self.items
 
     def load_thumbnails_async(self):
-        """Submit background tasks for missing thumbnails and load existing ones."""
+        """Fire callback for already-cached thumbs, submit background jobs for the rest."""
         for item in self.items:
-            if item.surface is not None:
-                continue
             if os.path.isfile(item.thumb_path):
-                self._load_cached_pixbuf(item)
+                self._thumb_ready(item)
             else:
                 self.executor.submit(self._generate_thumbnail_worker, item)
 
     def _ensure_thumbnail(self, item: WallpaperItem):
-        """Ensure thumbnail is generated and pre-rendered into Cairo surface."""
-        if item.surface is not None:
-            return
+        """Ensure a thumbnail file exists for an item (synchronous, used for pre-warm)."""
         if os.path.isfile(item.thumb_path):
-            self._load_cached_pixbuf(item)
+            self._thumb_ready(item)
         else:
             self._generate_thumbnail_worker(item)
 
-    def _create_cairo_surface(self, item: WallpaperItem, pixbuf: GdkPixbuf.Pixbuf):
-        """Pre-render and clip 16:9 thumbnail onto an offscreen Cairo ImageSurface for zero-cost blitting."""
-        try:
-            target_w = int(CARD_WIDTH)
-            target_h = int(THUMB_HEIGHT)
-            r = CARD_RADIUS
-
-            surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, target_w, target_h)
-            cr = cairo.Context(surf)
-
-            # Top rounded clip path
-            cr.new_path()
-            cr.arc(r, r, r, 3.14159, 3.0 * 3.14159 / 2.0)
-            cr.arc(target_w - r, r, r, 3.0 * 3.14159 / 2.0, 2.0 * 3.14159)
-            cr.line_to(target_w, target_h)
-            cr.line_to(0, target_h)
-            cr.close_path()
-            cr.clip()
-
-            pw = pixbuf.get_width()
-            ph = pixbuf.get_height()
-            scale = max(target_w / pw, target_h / ph)
-            dw = pw * scale
-            dh = ph * scale
-            dx = (target_w - dw) / 2.0
-            dy = (target_h - dh) / 2.0
-
-            cr.translate(dx, dy)
-            cr.scale(scale, scale)
-            Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
-            cr.paint()
-
-            item.surface = surf
-            item.pixbuf = pixbuf
-        except Exception as e:
-            print(f"Error pre-rendering surface for {item.filename}: {e}", file=sys.stderr)
-
-    def _attach_thumbnail_on_main(self, item: WallpaperItem, pixbuf: GdkPixbuf.Pixbuf):
-        """Main thread hook: Build Cairo surface safely and trigger UI refresh."""
-        self._create_cairo_surface(item, pixbuf)
-        if self.on_thumb_ready_cb and item.surface is not None:
+    def _thumb_ready(self, item: WallpaperItem):
+        """Notify the UI (on main thread) that a thumbnail file is available."""
+        if self.on_thumb_ready_cb:
             self.on_thumb_ready_cb(item)
-        return GLib.SOURCE_REMOVE
-
-    def _load_cached_pixbuf(self, item: WallpaperItem):
-        try:
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(item.thumb_path, 480, 270, True)
-            self._attach_thumbnail_on_main(item, pixbuf)
-        except Exception:
-            self.executor.submit(self._generate_thumbnail_worker, item)
 
     def _generate_thumbnail_worker(self, item: WallpaperItem):
         item.is_loading = True
@@ -198,7 +149,6 @@ class WallpaperScanner:
             if not os.path.isfile(item.path):
                 return
             if item.is_video:
-                import uuid
                 tmp_thumb = f"{item.thumb_path}.tmp.{os.getpid()}.{uuid.uuid4().hex[:6]}.jpg"
                 cmd = [
                     "ffmpeg", "-y", "-ss", "00:00:01", "-i", item.path,
@@ -218,12 +168,15 @@ class WallpaperScanner:
                 elif os.path.isfile(tmp_thumb):
                     os.remove(tmp_thumb)
             else:
-                pix = GdkPixbuf.Pixbuf.new_from_file_at_scale(item.path, 480, 270, True)
-                pix.savev(item.thumb_path, "jpeg", ["quality"], ["85"])
+                if not os.path.isfile(item.thumb_path):
+                    try:
+                        pix = GdkPixbuf.Pixbuf.new_from_file_at_scale(item.path, 480, 270, True)
+                        pix.savev(item.thumb_path, "jpeg", ["quality"], ["85"])
+                    except Exception as e:
+                        print(f"Thumbnail generation error on {item.filename}: {e}", file=sys.stderr)
 
             if os.path.isfile(item.thumb_path):
-                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(item.thumb_path, 480, 270, True)
-                GLib.idle_add(self._attach_thumbnail_on_main, item, pixbuf)
+                GLib.idle_add(self._thumb_ready, item)
         except Exception as e:
             print(f"Thumbnail generation error on {item.filename}: {e}", file=sys.stderr)
         finally:

@@ -225,6 +225,18 @@ input_path = "/home/user/.local/share/fcitx5/themes/nyxmellow/templates/highligh
 output_path = "/home/user/.local/share/fcitx5/themes/nyxmellow/highlight.svg"
 post_hook = "if pgrep -x fcitx5 >/dev/null 2>&1; then pkill -x fcitx5; sleep 1; fcitx5 -d >/dev/null 2>&1 & fi"
 
+# GTK Material You 主题（移植自 HyprYou，由 Noctalia 动态渲染到 gtk.css）
+# 路径中的 /home/user 为占位符，由 nyxniri.deploy 在部署时替换为实际 $HOME
+[theme.templates.user.nyxniri_gtk3]
+index = 3
+input_path = "/home/user/.config/noctalia/templates/gtk-3.0.css"
+output_path = "/home/user/.config/gtk-3.0/gtk.css"
+
+[theme.templates.user.nyxniri_gtk4]
+index = 4
+input_path = "/home/user/.config/noctalia/templates/gtk-4.0.css"
+output_path = "/home/user/.config/gtk-4.0/gtk.css"
+
 [wallpaper]
 directory = "/home/user/图片/Wallpapers"
 fill_mode = "crop"

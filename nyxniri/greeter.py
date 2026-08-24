@@ -139,7 +139,8 @@ def greeter_install() -> bool:
     # Polkit rule
     polkit_rule = (
         'polkit.addRule(function(action, subject) {\n'
-        f'    if (action.id == "org.{THEME_ENGINE}.greeter.apply-appearance") {{\n'
+        f'    if (action.id == "org.{THEME_ENGINE}.greeter.apply-appearance" &&\n'
+        '        subject.isInGroup("wheel")) {\n'
         '        return polkit.Result.YES;\n'
         '    }\n'
         '});\n'

@@ -15,6 +15,40 @@
 - Orbit 新增工作区工具菜单，Fastfetch、Starship、Yazi、mpv 和 Nvim 可使用 Nyx 配色。
 - 迁移 Shorin Niri 的终端、Vim 导航、媒体和截图键位，并加入 Shorin-contrib 命令组件。
 
+## [v3.0.2] - 2026-08-24
+
+### Fixed
+- 检查更新时报 `key does not contain a section: --progress` 错误的问题。
+
+## [v3.0.1] - 2026-08-24
+
+### Added
+- GTK3 和 GTK4 应用现在跟随壁纸自动切换 Material You 配色。
+
+### Changed
+- 壁纸选择器重写，缩略图改为按需加载。
+
+### Fixed
+- 切换深浅色模式后 Kitty、Nautilus 等应用跟随延迟数秒甚至不跟随的问题。
+- 非交互式环境下运行 `nyxniri uninstall` 不再意外执行卸载。
+- 配置写入失败时不再导致配置丢失。
+- 推荐应用菜单中 Mission Center 和 Fcitx5 现在能正确安装。
+- 安装 Fcitx5 后自动部署 NyxMellow 皮肤。
+- mpvpaper 内存泄漏检测恢复，并可以一键升级到修复版。
+- 更新仓库后自动检查并提示安装新增依赖。
+- 系统诊断恢复音频、亮度、门户、磁盘空间等检查项。
+- 诊断报告恢复显示器、工具版本、守护进程状态、系统日志等信息。
+- `nyxniri update --force` 重新恢复壁纸和登录界面的完整部署。
+- 从控制面板更新后新代码立即生效，不再需要手动重启。
+- `nyxniri install config` 恢复壁纸同步和模块勾选项。
+- 标准卸载现在会一并清理 NyxMellow 皮肤。
+- 登录界面免密规则重新限制为管理员组，与旧版一致。
+- 非交互模式下仓库有本地改动时不再误报更新成功。
+- 壁纸包下载不再覆盖用户已自定义的同名壁纸。
+- 护眼模式快捷切换留下的失效链接现在能自动修复。
+- Fish 的 Tab 补全恢复，不再只采纳历史建议而无法补全文件路径。
+
+### Changed
 ## [v3.0.0] - 2026-08-22
 
 ### Added

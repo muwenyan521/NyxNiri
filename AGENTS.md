@@ -59,6 +59,9 @@ python3 -m compileall nyxniri
 bash -n install.sh configs/noctalia/*.sh configs/niri/scripts/*.sh
 shellcheck install.sh
 
+# 行为契约测试（改动后必跑，零依赖秒级）
+python3 -m unittest discover -s tests -q
+
 # 沙箱隔离部署测试（极速、不污染实机、不下载外部大包）
 HOME=$(mktemp -d) ./install.sh test
 
@@ -69,7 +72,8 @@ HOME=$(mktemp -d) ./install.sh test
 **提交前验证**：
 
 1. **代码修改**：跑语法检查 `python3 -m compileall nyxniri` + `shellcheck`（成本极低，无例外）。
-2. **逻辑/流程改动**：追加沙箱部署测试 `HOME=$(mktemp -d) ./install.sh test`。
+2. **行为/逻辑改动**：跑 `python3 -m unittest discover -s tests -q`（契约测试，捕获回归）。
+3. **部署流程改动**：追加沙箱部署测试 `HOME=$(mktemp -d) ./install.sh test`。
 
 ---
 
@@ -85,6 +89,13 @@ HOME=$(mktemp -d) ./install.sh test
 | NVIDIA env 变量 | 默认注释，仅 `lspci` 检测后由部署引擎自动解注释，绝不能默认开启 |
 | 网络命令（curl 等） | 必须带 `--connect-timeout`，非关键调用加容错 |
 | 引擎代码（`nyxniri/`） | 避免硬编码特定项目名，用 `constants.py` 常量；TUI 文案可适当灵活 |
+
+**扩展指南（加法不是重构）**：
+
+- **加 CLI 命令**：写 `_cmd_xxx(sub_args) -> int` handler，加一行到 `COMMANDS` 字典。退出码自动传播。
+- **加可选模块**（greeter/fcitx 同款 install|status|uninstall 三件套）：用 `_module_handler()` 工厂，一行注册。
+- **加 doctor 检查项**：写 `_check_xxx(env) -> None` 函数，append 到 `DOCTOR_CHECKS` 列表。不碰 `run_doctor()`。
+- **加 i18n 键**：在 `TRANSLATIONS` 字典加 `zh` + `en` 条目。`test_i18n.py` 自动校验无孤儿/无缺失。
 
 **sed 转义**：
 ```bash
@@ -174,3 +185,47 @@ export VAR
 > 规范是底线，不是人格。
 >
 > **让每一句话都像 NyxNiri。**
+
+---
+
+## 9. Agent 工作流（纵向 pipeline）
+
+横向规则在 §1–§8；这里是"跑一个完整任务"的顺序。
+
+### Session 启动
+1. 读完整份 AGENTS.md（不是只看标题）。
+2. `git status` 看脏树——有未提交改动先问用户，别在脏树上动工。
+3. 跑 `python3 -m compileall nyxniri` + `unittest` 建基线，确认环境绿再改。
+
+### Intake（呼应 §0"懒得开局"）
+- 3 步以下、无歧义、非破坏性 → 直接干，别问。
+- 涉及破坏性操作（卸载/覆盖/写 /etc）、影响发布、或请求自相矛盾 → 先问一句。
+- 犹豫要不要动手 → 给最小可执行起点，别等用户把细节想清楚。
+
+### 执行
+- 3 步以上用 todo 列表追踪。
+- 最小改动：只动请求范围内的文件，不顺手重构、不"统一风格"。
+- 遵循 §1（存疑全库排查）、§4（铁律）、§8（语气）。
+
+### Definition of Done
+- §3 对应级别的验证跑过且绿。
+- 无 `# TODO`、调试 print、注释掉的代码残留。
+- 改动范围与请求一致；没有未说明的副作用。
+- Changelog 按 §5 写（如涉及用户可感知变化）。
+
+### 测试隔离
+- 所有新测试必须用 `tests/utils.py:TempEnv`，禁止碰真实 `~/.config`。
+- 反例：9cb1e0a 之前的测试把实仓库 `configs/niri/config.kdl` 写成桩文件。
+
+### 测试深度
+- 构造外部命令（git/curl/systemd 等）的函数，必须有"参数列表形状"契约测试，不能只断言返回值。
+- mock 层级要紧贴被测代码；mock 打得太高会绕过命令构造逻辑（反例：测 `safe_git_pull` 时 mock `_run_git_transfer`，就跳过了 `_with_git_progress` 的参数变形）。
+
+### Commit
+- Conventional Commits：`feat|fix|refactor|test|docs|chore: 简述`。
+- body 说"为什么"，不说"做了什么"（diff 已经说明做什么）。
+- 不主动 commit，除非用户明确要求。
+
+### 不确定时（呼应 §1）
+- 列已排查文件清单 + 理由，不要猜。
+- 宁可多问一句，不要凭"看起来像"下结论。

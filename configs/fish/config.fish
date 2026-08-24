@@ -274,9 +274,11 @@ if status is-interactive
     set fish_greeting
 
     # Tab 智能自动补全：优先采纳灰色历史建议，无建议时触发 Tab 列表补全
+    # 注：必须用 commandline --showing-suggestion 判断，不能用 -f accept-autosuggestion
+    # （后者只是把动作塞进队列并恒返回 true，会导致 else 分支永不执行、文件补全失效）
     function custom_tab_complete
-        if commandline -f accept-autosuggestion
-            # 成功采纳自动提示建议
+        if commandline --showing-suggestion
+            commandline -f accept-autosuggestion
         else
             commandline -f complete
         end

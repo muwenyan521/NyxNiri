@@ -38,6 +38,8 @@ environment {
 
 spawn-at-startup "noctalia"
 spawn-at-startup "~/.config/niri/scripts/toggle-eyecare.sh" "--sync"
+// Re-render GTK M3 templates after Noctalia palette is ready (~8s on cold start)
+spawn-at-startup "bash" "-c" "sleep 8; noctalia msg config-reload && noctalia msg templates-apply"
 
 hotkey-overlay {
     skip-at-startup

@@ -28,4 +28,7 @@ if __name__ == "__main__":
         win = OrbitLauncher(lock_fd=lock_fd, pid_path=os.path.join(RUNTIME_DIR, "nyxniri-orbit-launcher.pid"))
         signal.signal(signal.SIGINT, lambda s, f: win.dismiss_menu())
         signal.signal(signal.SIGTERM, lambda s, f: win.dismiss_menu())
-        Gtk.main()
+        try:
+            Gtk.main()
+        finally:
+            release_instance_lock(lock_fd, os.path.join(RUNTIME_DIR, "nyxniri-orbit-launcher.pid"))

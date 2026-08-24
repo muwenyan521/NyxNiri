@@ -906,6 +906,44 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"{Colors.BOLD_YELLOW}[!] Noctalia templates not registered ({{0}}){Colors.RESET}",
     },
 
+    # GTK Material You Theme
+    "gtk_install_title": {
+        "zh": f"\n{Colors.BOLD_PURPLE}:: GTK Material You 主题渲染{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_PURPLE}:: GTK Material You theme render{Colors.RESET}",
+    },
+    "gtk_render_ok": {
+        "zh": f"{Colors.BOLD_GREEN}[✓] Noctalia 已按当前主题渲染 GTK 配色{Colors.RESET}",
+        "en": f"{Colors.BOLD_GREEN}[✓] Noctalia rendered GTK theme with current palette{Colors.RESET}",
+    },
+    "gtk_render_pending": {
+        "zh": f"{Colors.BOLD_YELLOW}[!] noctalia 未运行，GTK 配色将在下次主题切换时生效{Colors.RESET}",
+        "en": f"{Colors.BOLD_YELLOW}[!] noctalia not running; GTK theme will apply on next theme change{Colors.RESET}",
+    },
+    "gtk_not_registered": {
+        "zh": f"{Colors.BOLD_YELLOW}[!] GTK 模板未注册，请先运行 nyxniri install 部署 noctalia 配置{Colors.RESET}",
+        "en": f"{Colors.BOLD_YELLOW}[!] GTK templates not registered; run nyxniri install to deploy noctalia config{Colors.RESET}",
+    },
+    "gtk_status_title": {
+        "zh": f"\n{Colors.BOLD_CYAN}:: GTK Material You 主题状态{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_CYAN}:: GTK Material You theme status{Colors.RESET}",
+    },
+    "gtk_uninstall_title": {
+        "zh": f"\n{Colors.BOLD_YELLOW}:: GTK Material You 主题卸载{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_YELLOW}:: GTK Material You theme uninstall{Colors.RESET}",
+    },
+    "gtk_unregistered": {
+        "zh": f"{Colors.BOLD_GREEN}[✓] 已从 {{0}} 配置中移除 GTK 模板注册{Colors.RESET}",
+        "en": f"{Colors.BOLD_GREEN}[✓] GTK templates unregistered from {{0}} config{Colors.RESET}",
+    },
+    "gtk_css_removed": {
+        "zh": f"{Colors.BOLD_GREEN}[✓] 已删除: {{0}}{Colors.RESET}",
+        "en": f"{Colors.BOLD_GREEN}[✓] Removed: {{0}}{Colors.RESET}",
+    },
+    "gtk_uninstall_done": {
+        "zh": f"{Colors.BOLD_GREEN}[✓] GTK Material You 主题已移除，GTK 应用回退到 adw-gtk3 默认配色{Colors.RESET}",
+        "en": f"{Colors.BOLD_GREEN}[✓] GTK Material You theme removed; GTK apps reverted to adw-gtk3 defaults{Colors.RESET}",
+    },
+
     # Core Deployment & Backup
     "backing_up": {
         "zh": f"\n{Colors.BOLD_BLUE}:: 正在创建配置快照…{Colors.RESET}",
@@ -1013,6 +1051,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
   test                               执行开发者沙箱部署测试
   greeter [install|status|uninstall] 管理 Noctalia Greeter
   fcitx [install|status|uninstall]   管理 NyxMellow fcitx5 皮肤
+  gtk [install|status|uninstall]     管理 GTK Material You 主题
   help                               显示本帮助
   无参数                             打开交互式控制面板""",
         "en": """{0} dotfiles manager ({1})
@@ -1036,6 +1075,7 @@ Commands:
   test                               Run the developer sandbox deploy
   greeter [install|status|uninstall] Manage Noctalia Greeter
   fcitx [install|status|uninstall]   Manage the NyxMellow fcitx5 skin
+  gtk [install|status|uninstall]     Manage the GTK Material You theme
   help                               Show this help
   no arguments                       Open the interactive control panel""",
     },
@@ -1128,10 +1168,6 @@ Commands:
     "net_download_all_fail": {
         "zh": f"{Colors.BOLD_RED}[✗] 所有镜像节点均拉取失败{Colors.RESET}\n",
         "en": f"{Colors.BOLD_RED}[✗] All mirror nodes failed{Colors.RESET}\n",
-    },
-    "net_changelog_title": {
-        "zh": "最新更新日志",
-        "en": "Latest Changelog",
     },
 
     # Logging & Atomic Deployment
@@ -1296,6 +1332,10 @@ Commands:
     "mpvpaper_upgrade_skip": {
         "zh": "手动升级命令: paru -S mpvpaper-git 或 yay -S mpvpaper-git",
         "en": "Manual upgrade: paru -S mpvpaper-git or yay -S mpvpaper-git",
+    },
+    "mpvpaper_upgrade_prompt": {
+        "zh": "是否立即安装 mpvpaper-git 修复版？ [y/N] ",
+        "en": "Install mpvpaper-git fix now? [y/N] ",
     },
     "err_mpvpaper_git_failed": {
         "zh": f"{Colors.BOLD_RED}[✗] mpvpaper-git 安装失败{Colors.RESET}",

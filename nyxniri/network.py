@@ -85,9 +85,27 @@ def _run_cancellable_process(
 def _with_git_progress(command: List[str]) -> Tuple[List[str], bool]:
     """Force native Git progress only when stderr is attached to a terminal."""
     show_progress = sys.stderr.isatty()
-    if show_progress:
-        return [*command[:2], "--progress", *command[2:]], True
-    return command, False
+    if not show_progress:
+        return command, False
+    # Locate the git subcommand (first positional token after git and its
+    # value-taking top-level options like -c / -C / --git-dir / --work-tree / --namespace).
+    # Inserting --progress before the subcommand would feed it to the preceding
+    # value-taking option (e.g. as the -c key), which git rejects.
+    value_opts = {"-c", "-C", "--git-dir", "--work-tree", "--namespace"}
+    i = 1  # skip "git"
+    while i < len(command):
+        tok = command[i]
+        if tok == "--":
+            i += 1
+            break
+        if tok.startswith("-"):
+            i += 2 if tok in value_opts else 1
+            continue
+        break
+    sub_idx = i
+    if sub_idx >= len(command):
+        return [*command, "--progress"], True
+    return [*command[:sub_idx + 1], "--progress", *command[sub_idx + 1:]], True
 
 
 def _run_git_transfer(command: List[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
@@ -238,12 +256,17 @@ def fetch_raw_with_fallback(user_repo: str, branch: str, file_path: str, output_
 
 def safe_git_pull(target_dir: Path) -> Optional[bool]:
     """Pull upstream changes: True=updated, None=skipped, False=failed."""
+    if not shutil.which("git"):
+        print(msg("git_required"))
+        return False
+
     if not (target_dir / ".git").is_dir():
         log_msg("ERROR", f"Update target is not a Git repository: {target_dir}")
         return False
 
     run_mode = get_env().run_mode
     env = {**os.environ, "LC_ALL": "C"}
+    git_net = ["-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=15"]
     # Check for uncommitted changes
     res_status = subprocess.run(
         ["git", "status", "--porcelain"],
@@ -260,6 +283,10 @@ def safe_git_pull(target_dir: Path) -> Optional[bool]:
             print(msg("update_skipped_dev_repo", str(target_dir)))
             log_msg("WARN", f"Skipped update for dirty local repo: {target_dir}")
             return None
+        if not sys.stdin.isatty():
+            print(msg("update_cancelled_dirty"))
+            log_msg("WARN", f"Skipped update for dirty cache (non-interactive): {target_dir}")
+            return False
         if not prompt_confirm("dirty_tree_confirm", "n"):
             print(msg("update_cancelled_dirty"))
             return None
@@ -269,7 +296,7 @@ def safe_git_pull(target_dir: Path) -> Optional[bool]:
     # Fetch & pull
     sys.stdout.write(msg("checking_updates") + "\n")
     res_pull = _run_git_transfer(
-        ["git", "pull", "--ff-only"],
+        ["git", *git_net, "pull", "--ff-only"],
         cwd=target_dir,
         env=env,
     )
@@ -283,7 +310,7 @@ def safe_git_pull(target_dir: Path) -> Optional[bool]:
 
     # Fallback to fetch & reset only for the disposable remote cache.
     res_fetch = _run_git_transfer(
-        ["git", "fetch", "--depth", "1", "origin", "main"],
+        ["git", *git_net, "fetch", "--depth", "1", "origin", "main"],
         cwd=target_dir,
         env=env,
     )

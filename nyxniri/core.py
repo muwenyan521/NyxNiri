@@ -2,6 +2,7 @@
 
 import atexit
 import datetime
+import fcntl
 import os
 import re
 import shutil
@@ -128,47 +129,56 @@ def get_version(target_dir: Path) -> str:
 
     return "v3.0.0"
 
-# --- PID Single-Instance Lock ---
+# --- Single-Instance Lock (fcntl.flock — auto-releases on process death) ---
 _LOCK_FILE: Optional[Path] = None
+_LOCK_FD: Optional[int] = None
 
 def acquire_lock() -> None:
-    """Acquire single-instance PID lock, auto-healing stale/dead locks."""
-    global _LOCK_FILE
+    """Acquire single-instance lock via fcntl.flock.
+
+    flock is kernel-level and auto-releases when the process exits (even on
+    SIGKILL), so there is no stale-lock healing to do and no check-then-write
+    race. A PID is still written to the file for diagnostics only.
+    """
+    global _LOCK_FILE, _LOCK_FD
     env = get_env()
     env.state_dir.mkdir(parents=True, exist_ok=True)
     _LOCK_FILE = env.state_dir / f"{CLI_CMD}.lock"
-
-    if _LOCK_FILE.is_file():
+    try:
+        _LOCK_FD = os.open(_LOCK_FILE, os.O_CREAT | os.O_RDWR, 0o644)
+        fcntl.flock(_LOCK_FD, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (BlockingIOError, OSError):
+        # Another instance holds the lock — surface its PID if we can read it
+        pid = "unknown"
         try:
             content = _LOCK_FILE.read_text().strip()
             if content.isdigit():
-                existing_pid = int(content)
-                if existing_pid != os.getpid():
-                    # Test if existing_pid is alive
-                    try:
-                        os.kill(existing_pid, 0)
-                        from nyxniri.i18n import msg
-                        print(msg("err_already_running", existing_pid), file=sys.stderr)
-                        sys.exit(1)
-                    except OSError:
-                        # Process does not exist; lock is stale and can be overwritten
-                        pass
+                pid = content
         except Exception:
             pass
-
+        from nyxniri.i18n import msg
+        print(msg("err_already_running", pid), file=sys.stderr)
+        sys.exit(1)
+    # Best-effort PID write for diagnostics (the lock itself is the source of truth)
     try:
-        _LOCK_FILE.write_text(str(os.getpid()))
+        os.ftruncate(_LOCK_FD, 0)
+        os.write(_LOCK_FD, str(os.getpid()).encode())
     except Exception:
         pass
 
 def release_lock() -> None:
-    """Release the PID lock if owned by the current process."""
-    global _LOCK_FILE
-    if _LOCK_FILE and _LOCK_FILE.is_file():
+    """Release the single-instance lock and remove the lock file."""
+    global _LOCK_FD, _LOCK_FILE
+    if _LOCK_FD is not None:
         try:
-            content = _LOCK_FILE.read_text().strip()
-            if content == str(os.getpid()):
-                _LOCK_FILE.unlink(missing_ok=True)
+            fcntl.flock(_LOCK_FD, fcntl.LOCK_UN)
+            os.close(_LOCK_FD)
+        except Exception:
+            pass
+        _LOCK_FD = None
+    if _LOCK_FILE:
+        try:
+            _LOCK_FILE.unlink(missing_ok=True)
         except Exception:
             pass
 

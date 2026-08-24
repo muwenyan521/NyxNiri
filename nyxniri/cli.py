@@ -65,6 +65,7 @@ from nyxniri.tui import (
     Menu,
     pad_display,
     press_any_key,
+    prompt_confirm,
     select_language,
 )
 
@@ -78,7 +79,7 @@ def run_master_component_menu(is_update: bool = False, mode: str = "full") -> Op
     for item in items:
         entries.append(CheckboxEntry(key=f"config_{item}", label=msg("master_item_config", item), checked=True))
 
-    if mode == "full":
+    if mode == "full" or is_update:
         # 2. Heavy assets (wallpapers)
         wp_checked = not wallpapers_pack_present()
         wp_status = msg("status_wallpapers_installed") if wallpapers_pack_present() else msg("status_wallpapers_missing")
@@ -184,17 +185,17 @@ def install_configs_workflow(mode: str = "full") -> bool:
             return True
     else:
         chosen_configs = discover_config_items()
-        do_wallpapers = mode == "full" and not wallpapers_pack_present()
-        do_fcitx = mode == "full" and fcitx_enabled()
+        do_wallpapers = not wallpapers_pack_present()
+        do_fcitx = fcitx_enabled()
         do_greeter = False
         do_backup = False
 
     _phase_preflight_check(mode, chosen_configs, do_fcitx, do_greeter, do_wallpapers, do_backup)
 
     # Step counting
-    steps = 1
+    steps = 2  # configs + wallpapers
     if mode == "full":
-        steps += 2
+        steps += 1  # deps
     if do_fcitx:
         steps += 1
     if do_greeter:
@@ -224,12 +225,11 @@ def install_configs_workflow(mode: str = "full") -> bool:
             )
             return False
 
-    # 3. Wallpapers
+    # 3. Wallpapers (always run — at least syncs offline fallback wallpapers)
     wallpaper_result = None
-    if mode == "full":
-        cur_step += 1
-        print(msg("install_step_wallpapers", f"{cur_step}/{steps}"))
-        wallpaper_result = deploy_wallpapers(do_download=do_wallpapers)
+    cur_step += 1
+    print(msg("install_step_wallpapers", f"{cur_step}/{steps}"))
+    wallpaper_result = deploy_wallpapers(do_download=do_wallpapers)
 
     # 4. Fcitx5
     if do_fcitx:
@@ -262,9 +262,14 @@ def offer_overwrite_upgrade(flag: str = "") -> bool:
         if failed_items:
             render_completion_screen("update", failed_items=failed_items)
             return False
+        wallpaper_result = deploy_wallpapers(do_download=True)
         if fcitx_enabled():
             fcitx_install()
-        render_completion_screen("update")
+        try:
+            greeter_install()
+        except Exception as e:
+            log_msg("WARN", f"Greeter install skipped during --force update: {e}")
+        render_completion_screen("update", wallpaper_result=wallpaper_result)
         return True
     elif flag == "--no-deploy":
         return True
@@ -291,6 +296,9 @@ def offer_overwrite_upgrade(flag: str = "") -> bool:
     if choice == 0:
         chosen = run_master_component_menu(is_update=True, mode="full")
         if chosen:
+            if not chosen["configs"] and not chosen["wallpapers"] and not chosen["fcitx"] and not chosen["greeter"]:
+                print(msg("log_no_components_selected"))
+                return True
             print(msg("upgrading_selected"))
             preserved: List[str] = []
             if chosen["configs"]:
@@ -329,6 +337,22 @@ def offer_overwrite_upgrade(flag: str = "") -> bool:
     return True
 
 # --- Submenus ---
+def check_new_deps_post_update() -> None:
+    """Check for newly introduced core dependencies after a repository update."""
+    missing = get_missing_deps()
+    if not missing:
+        return
+    print(msg("new_deps_detected", " ".join(missing)))
+    if not sys.stdin.isatty():
+        log_msg("INFO", f"Auto-installing new deps non-interactively: {' '.join(missing)}")
+        install_selected_deps(missing)
+        return
+    if prompt_confirm("prompt_install_missing_deps", "y"):
+        install_selected_deps(missing)
+    else:
+        print(msg("deps_install_skipped"))
+
+
 def snapshot_menu_loop() -> None:
     """Snapshot management interactive submenu."""
     while True:
@@ -462,6 +486,11 @@ def main_menu_loop() -> None:
             update_result = safe_git_pull(env.repo_dir)
             if update_result is True:
                 offer_overwrite_upgrade()
+                check_new_deps_post_update()
+                print(msg("updating_done"))
+                press_any_key()
+                # Re-exec to load new code
+                os.execv(sys.executable, [sys.executable, "-m", "nyxniri"])
             elif update_result is False:
                 print(msg("updating_failed"), file=sys.stderr)
             press_any_key()
@@ -492,6 +521,188 @@ def exit_usage(usage: str) -> None:
     print(msg("err_invalid_args", usage), file=sys.stderr)
     sys.exit(2)
 
+
+# --- Command Handlers ---
+# Each handler receives (sub_args: List[str]) and returns an int exit code.
+# Adding a new command = write a handler + add one line to COMMANDS.
+
+def _cmd_install(sub_args: List[str]) -> int:
+    mode = sub_args[0] if sub_args else "full"
+    if len(sub_args) > 1 or mode not in ("full", "config"):
+        exit_usage(f"{CLI_CMD} install [full|config]")
+    return 0 if install_configs_workflow(mode) else 1
+
+def _cmd_snapshot(sub_args: List[str]) -> int:
+    if sub_args and sub_args[0] in ("delete", "rm"):
+        if len(sub_args) > 2:
+            exit_usage(f"{CLI_CMD} snapshot delete [index]")
+        target = sub_args[1] if len(sub_args) > 1 else ""
+        return 0 if delete_backup(target) else 1
+    note = " ".join(sub_args)
+    return 0 if backup_configs(note=note, interactive=False) else 1
+
+def _cmd_rollback(sub_args: List[str]) -> int:
+    if len(sub_args) > 1:
+        exit_usage(f"{CLI_CMD} rollback [index]")
+    target = sub_args[0] if sub_args else ""
+    return 0 if rollback_configs(target) else 1
+
+def _cmd_list(sub_args: List[str]) -> int:
+    if sub_args:
+        exit_usage(f"{CLI_CMD} list")
+    list_backups()
+    return 0
+
+def _cmd_uninstall(sub_args: List[str]) -> int:
+    target = sub_args[0] if sub_args else ""
+    if len(sub_args) > 1 or target not in ("", "standard", "restore", "purge"):
+        exit_usage(f"{CLI_CMD} uninstall [standard|restore|purge]")
+    return 0 if uninstall_nyxniri(target) else 1
+
+def _cmd_purge(sub_args: List[str]) -> int:
+    if sub_args:
+        exit_usage(f"{CLI_CMD} purge")
+    return 0 if uninstall_nyxniri("purge") else 1
+
+def _cmd_doctor(sub_args: List[str]) -> int:
+    if sub_args:
+        exit_usage(f"{CLI_CMD} doctor")
+    run_doctor()
+    return 0
+
+def _cmd_deps(sub_args: List[str]) -> int:
+    sub = sub_args[0].lower() if sub_args else ""
+    if len(sub_args) > 1 or sub not in ("", "core", "apps", "opt", "optional"):
+        exit_usage(f"{CLI_CMD} deps [core|apps]")
+    if sub == "core":
+        run_dep_menu_loop()
+    elif sub in ("apps", "opt", "optional"):
+        run_optional_apps_menu_loop()
+    else:
+        deps_menu_loop()
+    return 0
+
+def _cmd_apps(sub_args: List[str]) -> int:
+    if sub_args:
+        exit_usage(f"{CLI_CMD} apps")
+    run_optional_apps_menu_loop()
+    return 0
+
+def _cmd_wallpapers(sub_args: List[str]) -> int:
+    if sub_args:
+        exit_usage(f"{CLI_CMD} wallpapers")
+    wallpaper_result = deploy_wallpapers(do_download=True)
+    return 0 if wallpaper_result.downloaded else 1
+
+def _cmd_bug(sub_args: List[str]) -> int:
+    if sub_args:
+        exit_usage(f"{CLI_CMD} bug")
+    generate_bug_report()
+    return 0
+
+def _cmd_test(sub_args: List[str]) -> int:
+    if sub_args:
+        exit_usage(f"{CLI_CMD} test")
+    return 0 if test_deploy() else 1
+
+def _module_handler(module_name: str, triad_name: str):
+    """Factory: build a handler for install|status|uninstall triad (greeter/fcitx).
+
+    Looks up functions lazily from the module so patches in tests take effect.
+    """
+    def handler(sub_args: List[str]) -> int:
+        import importlib
+        mod = importlib.import_module(f"nyxniri.{module_name}")
+        install_fn = getattr(mod, f"{module_name}_install")
+        uninstall_fn = getattr(mod, f"{module_name}_uninstall")
+        status_fn = getattr(mod, f"{module_name}_status")
+        sub = sub_args[0].lower() if sub_args else ""
+        if len(sub_args) > 1 or sub not in ("", "install", "setup", "status", "uninstall", "remove"):
+            exit_usage(f"{CLI_CMD} {triad_name} [install|status|uninstall]")
+        if sub in ("install", "setup"):
+            return 0 if install_fn() else 1
+        elif sub in ("uninstall", "remove"):
+            return 0 if uninstall_fn() else 1
+        else:
+            status_fn()
+            return 0
+    return handler
+
+def _cmd_theme(sub_args: List[str]) -> int:
+    sub = sub_args[0] if sub_args else "toggle"
+    if len(sub_args) > 1 or sub not in ("toggle", "dark", "light", "sync", "status"):
+        exit_usage(f"{CLI_CMD} theme [toggle|dark|light|sync|status]")
+    env = get_env()
+    sync_script = env.config_dir / THEME_ENGINE / "theme-sync.sh"
+    if not sync_script.is_file() and (env.configs_src / THEME_ENGINE / "theme-sync.sh").is_file():
+        sync_script = env.configs_src / THEME_ENGINE / "theme-sync.sh"
+    if sync_script.is_file():
+        try:
+            sync_script.chmod(0o755)
+        except Exception:
+            pass
+        res = subprocess.run(["bash", str(sync_script), sub], check=False)
+        return res.returncode
+    else:
+        print(msg("err_theme_sync_missing"), file=sys.stderr)
+        return 1
+
+def _cmd_update(sub_args: List[str]) -> int:
+    flag = sub_args[0] if sub_args else ""
+    if len(sub_args) > 1 or flag not in ("", "--force", "--deploy", "--no-deploy"):
+        exit_usage(f"{CLI_CMD} update [--force|--no-deploy]")
+    env = get_env()
+    update_result = safe_git_pull(env.repo_dir)
+    if update_result is True:
+        deploy_ok = offer_overwrite_upgrade(flag)
+        check_new_deps_post_update()
+        print(msg("updating_done"))
+        return 0 if deploy_ok else 1
+    if update_result is False:
+        print(msg("updating_failed"), file=sys.stderr)
+        return 1
+    return 0
+
+def _cmd_help(sub_args: List[str]) -> int:
+    if sub_args:
+        exit_usage(f"{CLI_CMD} help")
+    print_help()
+    return 0
+
+
+COMMANDS = {
+    "install":   (_cmd_install,   f"{CLI_CMD} install [full|config]"),
+    "deploy":    (_cmd_install,   f"{CLI_CMD} install [full|config]"),
+    "snapshot":  (_cmd_snapshot,  f"{CLI_CMD} snapshot [note]"),
+    "backup":    (_cmd_snapshot,  f"{CLI_CMD} snapshot [note]"),
+    "rollback":  (_cmd_rollback,  f"{CLI_CMD} rollback [index]"),
+    "restore":   (_cmd_rollback,  f"{CLI_CMD} rollback [index]"),
+    "list":      (_cmd_list,      f"{CLI_CMD} list"),
+    "uninstall": (_cmd_uninstall, f"{CLI_CMD} uninstall [standard|restore|purge]"),
+    "remove":    (_cmd_uninstall, f"{CLI_CMD} uninstall [standard|restore|purge]"),
+    "purge":     (_cmd_purge,     f"{CLI_CMD} purge"),
+    "doctor":    (_cmd_doctor,    f"{CLI_CMD} doctor"),
+    "deps":      (_cmd_deps,      f"{CLI_CMD} deps [core|apps]"),
+    "apps":      (_cmd_apps,      f"{CLI_CMD} apps"),
+    "recommended": (_cmd_apps,    f"{CLI_CMD} apps"),
+    "wallpapers": (_cmd_wallpapers, f"{CLI_CMD} wallpapers"),
+    "wp":        (_cmd_wallpapers, f"{CLI_CMD} wallpapers"),
+    "bug":       (_cmd_bug,       f"{CLI_CMD} bug"),
+    "report":    (_cmd_bug,       f"{CLI_CMD} bug"),
+    "test":      (_cmd_test,      f"{CLI_CMD} test"),
+    "greeter":   (_module_handler("greeter", "greeter"),
+                  f"{CLI_CMD} greeter [install|status|uninstall]"),
+    "fcitx":     (_module_handler("fcitx", "fcitx"),
+                  f"{CLI_CMD} fcitx [install|status|uninstall]"),
+    "gtk":       (_module_handler("gtktheme", "gtk"),
+                  f"{CLI_CMD} gtk [install|status|uninstall]"),
+    "theme":     (_cmd_theme,     f"{CLI_CMD} theme [toggle|dark|light|sync|status]"),
+    "update":    (_cmd_update,    f"{CLI_CMD} update [--force|--no-deploy]"),
+    "help":      (_cmd_help,      f"{CLI_CMD} help"),
+    "-h":        (_cmd_help,      f"{CLI_CMD} help"),
+    "--help":    (_cmd_help,      f"{CLI_CMD} help"),
+}
+
 def main() -> None:
     """Main CLI entrypoint."""
     if os.getuid() == 0:
@@ -500,7 +711,7 @@ def main() -> None:
 
     acquire_lock()
     init_logger()
-    env = get_env()
+    get_env()
     ensure_nyxniri_symlink()
 
     args = sys.argv[1:]
@@ -508,126 +719,10 @@ def main() -> None:
         cmd = args[0].lower()
         sub_args = args[1:]
 
-        if cmd in ("install", "deploy"):
-            mode = sub_args[0] if sub_args else "full"
-            if len(sub_args) > 1 or mode not in ("full", "config"):
-                exit_usage(f"{CLI_CMD} install [full|config]")
-            sys.exit(0 if install_configs_workflow(mode) else 1)
-        elif cmd in ("snapshot", "backup"):
-            if sub_args and sub_args[0] in ("delete", "rm"):
-                if len(sub_args) > 2:
-                    exit_usage(f"{CLI_CMD} snapshot delete [index]")
-                target = sub_args[1] if len(sub_args) > 1 else ""
-                sys.exit(0 if delete_backup(target) else 1)
-            else:
-                note = " ".join(sub_args)
-                sys.exit(0 if backup_configs(note=note, interactive=False) else 1)
-        elif cmd in ("rollback", "restore"):
-            if len(sub_args) > 1:
-                exit_usage(f"{CLI_CMD} rollback [index]")
-            target = sub_args[0] if sub_args else ""
-            sys.exit(0 if rollback_configs(target) else 1)
-        elif cmd == "list":
-            if sub_args:
-                exit_usage(f"{CLI_CMD} list")
-            list_backups()
-            sys.exit(0)
-        elif cmd in ("uninstall", "remove"):
-            target = sub_args[0] if sub_args else ""
-            if len(sub_args) > 1 or target not in ("", "standard", "restore", "purge"):
-                exit_usage(f"{CLI_CMD} uninstall [standard|restore|purge]")
-            sys.exit(0 if uninstall_nyxniri(target) else 1)
-        elif cmd == "purge":
-            if sub_args:
-                exit_usage(f"{CLI_CMD} purge")
-            sys.exit(0 if uninstall_nyxniri("purge") else 1)
-        elif cmd == "doctor":
-            if sub_args:
-                exit_usage(f"{CLI_CMD} doctor")
-            run_doctor()
-            sys.exit(0)
-        elif cmd == "deps":
-            sub = sub_args[0].lower() if sub_args else ""
-            if len(sub_args) > 1 or sub not in ("", "core", "apps", "opt", "optional"):
-                exit_usage(f"{CLI_CMD} deps [core|apps]")
-            if sub == "core":
-                run_dep_menu_loop()
-            elif sub in ("apps", "opt", "optional"):
-                run_optional_apps_menu_loop()
-            else:
-                deps_menu_loop()
-            sys.exit(0)
-        elif cmd in ("apps", "recommended"):
-            if sub_args:
-                exit_usage(f"{CLI_CMD} apps")
-            run_optional_apps_menu_loop()
-            sys.exit(0)
-        elif cmd in ("wallpapers", "wp"):
-            if sub_args:
-                exit_usage(f"{CLI_CMD} wallpapers")
-            wallpaper_result = deploy_wallpapers(do_download=True)
-            sys.exit(0 if wallpaper_result.downloaded else 1)
-        elif cmd in ("bug", "report"):
-            if sub_args:
-                exit_usage(f"{CLI_CMD} {cmd}")
-            generate_bug_report()
-            sys.exit(0)
-        elif cmd == "test":
-            if sub_args:
-                exit_usage(f"{CLI_CMD} test")
-            sys.exit(0 if test_deploy() else 1)
-        elif cmd == "greeter":
-            sub = sub_args[0].lower() if sub_args else ""
-            if len(sub_args) > 1 or sub not in ("", "install", "setup", "status", "uninstall", "remove"):
-                exit_usage(f"{CLI_CMD} greeter [install|status|uninstall]")
-            if sub in ("install", "setup"):
-                greeter_install()
-            elif sub in ("uninstall", "remove"):
-                greeter_uninstall()
-            else:
-                greeter_status()
-            sys.exit(0)
-        elif cmd == "fcitx":
-            sub = sub_args[0].lower() if sub_args else ""
-            if len(sub_args) > 1 or sub not in ("", "install", "setup", "status", "uninstall", "remove"):
-                exit_usage(f"{CLI_CMD} fcitx [install|status|uninstall]")
-            if sub in ("install", "setup"):
-                fcitx_install()
-            elif sub in ("uninstall", "remove"):
-                fcitx_uninstall()
-            else:
-                fcitx_status()
-            sys.exit(0)
-        elif cmd == "theme":
-            sub = sub_args[0] if sub_args else "toggle"
-            if len(sub_args) > 1 or sub not in ("toggle", "dark", "light", "sync", "status"):
-                exit_usage(f"{CLI_CMD} theme [toggle|dark|light|sync|status]")
-            sync_script = env.config_dir / THEME_ENGINE / "theme-sync.sh"
-            if not sync_script.is_file() and (env.configs_src / THEME_ENGINE / "theme-sync.sh").is_file():
-                sync_script = env.configs_src / THEME_ENGINE / "theme-sync.sh"
-            if sync_script.is_file():
-                sync_script.chmod(0o755)
-                res = subprocess.run(["bash", str(sync_script), sub], check=False)
-                sys.exit(res.returncode)
-            else:
-                print(msg("err_theme_sync_missing"), file=sys.stderr)
-                sys.exit(1)
-        elif cmd == "update":
-            flag = sub_args[0] if sub_args else ""
-            if len(sub_args) > 1 or flag not in ("", "--force", "--deploy", "--no-deploy"):
-                exit_usage(f"{CLI_CMD} update [--force|--no-deploy]")
-            update_result = safe_git_pull(env.repo_dir)
-            if update_result is True:
-                sys.exit(0 if offer_overwrite_upgrade(flag) else 1)
-            if update_result is False:
-                print(msg("updating_failed"), file=sys.stderr)
-                sys.exit(1)
-            sys.exit(0)
-        elif cmd in ("help", "-h", "--help"):
-            if sub_args:
-                exit_usage(f"{CLI_CMD} help")
-            print_help()
-            sys.exit(0)
+        entry = COMMANDS.get(cmd)
+        if entry:
+            handler, _ = entry
+            sys.exit(handler(sub_args))
 
         print(msg("err_unknown_command", args[0]), file=sys.stderr)
         print_help(file=sys.stderr)

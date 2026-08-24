@@ -1,11 +1,18 @@
 """
-NyxNiri Wallpaper Picker Main Window & Interaction Controller
-Stateless, event-driven Wayland Layer-Shell dialog with continuous smooth scrolling, spring physics, and pure M3E design.
+NyxNiri Wallpaper Picker — Material You native widget edition.
+
+A Wayland Layer-Shell dialog built from Gtk.FlowBox / Gtk.SearchEntry / M3 CSS,
+replacing the Cairo hand-draw pipeline. Thumbnails are loaded on-demand via
+CSS background-image, so off-screen cards hold no pixbufs in memory and
+scrolling past a card releases its decoded image automatically.
+
+The dynamic Material You palette is read from Noctalia's starship cache
+(.cache/noctalia/starship-palette.toml) and injected into a CSS provider
+at build time, so the whole dialog follows the wallpaper-derived tonal scheme.
 """
 
-import sys
 import os
-import math
+import sys
 import random
 import threading
 import gi
@@ -15,76 +22,214 @@ gi.require_version("Gdk", "3.0")
 gi.require_version("Pango", "1.0")
 from gi.repository import Gtk, Gdk, GtkLayerShell, GLib, Pango
 
-from .physics import Spring
 from .palette import load_material_palette
 from .lock import release_instance_lock
-from .config import WIN_WIDTH, WIN_HEIGHT
-from nyxui.layout import calculate_grid_metrics
-from .scanner import WallpaperScanner
-from .backend import apply_wallpaper, apply_random_wallpaper
-from .renderer import (
-    draw_dialog_container, draw_header,
-    draw_category_chips, draw_card, draw_scrollbar, draw_empty_state
+from .config import (
+    WIN_WIDTH, WIN_HEIGHT, WIN_RADIUS,
+    GRID_COLS, CARD_WIDTH, THUMB_HEIGHT,
+    GAP_X, GAP_Y,
 )
+from .scanner import WallpaperScanner
+from .backend import apply_wallpaper
+
+
+# ── M3 color helpers ────────────────────────────────────────────────────────
+def _rgb(rgb):
+    r, g, b = rgb
+    return f"rgb({int(r * 255)},{int(g * 255)},{int(b * 255)})"
+
+
+def _rgba(rgb, a):
+    r, g, b = rgb
+    return f"rgba({int(r * 255)},{int(g * 255)},{int(b * 255)},{a})"
+
+
+def _on_primary(primary_rgb):
+    """Pick black or white text on a primary fill via relative luminance (WCAG)."""
+    pr, pg, pb = primary_rgb
+    lum = 0.299 * pr + 0.587 * pg + 0.114 * pb
+    return "#0b0c10" if lum > 0.55 else "#f5f6f9"
+
+
+def _build_m3_css(palette: dict) -> str:
+    p = palette
+    on_surface = p["on_surface"]
+    on_surface_var = p["on_surface_var"]
+    surface = p["surface"]
+    surface_dim = p["surface_dim"]
+    surface_bright = p.get("surface_bright", p["surface"])
+    primary = p["primary"]
+    tertiary = p["tertiary"]
+    outline = p["outline"]
+    is_dark = p.get("is_dark", True)
+    on_primary = _on_primary(primary)
+
+    R = int(WIN_RADIUS)
+    CR = 16  # card corner radius (M3 medium shape)
+    chip_bg_idle = _rgba(surface_bright, 0.12 if is_dark else 0.22)
+    chip_bg_hover = _rgba(surface_bright, 0.25 if is_dark else 0.40)
+    outline_idle = _rgba(outline, 0.25 if is_dark else 0.35)
+    outline_hover = _rgba(outline, 0.40 if is_dark else 0.50)
+
+    return f"""
+    window.background {{
+        background-color: transparent;
+    }}
+
+    /* ── M3 dialog (elevated, extra-large shape) ── */
+    .picker-dialog {{
+        background-color: {_rgb(surface)};
+        border-radius: {R}px;
+        border: 1px solid {_rgba(outline, 0.20)};
+        box-shadow: 0 2px 8px rgba(0,0,0,0.18), 0 12px 36px rgba(0,0,0,0.10);
+        padding: 24px 28px 20px 28px;
+        transition: opacity 220ms cubic-bezier(0.2, 0.0, 0, 1);
+    }}
+    .picker-dialog.dismissing {{ opacity: 0; }}
+
+    .header {{ spacing: 12px; }}
+    .header-title {{
+        color: {_rgb(on_surface)};
+        font-family: "Inter","Noto Sans CJK SC",sans-serif;
+        font-weight: 600;
+        font-size: 15pt;
+    }}
+    .header-count {{
+        color: {_rgba(on_surface_var, 0.75)};
+        font-size: 11pt;
+    }}
+
+    /* ── M3 search bar (pill, surface-container-high) ── */
+    .search {{
+        background-color: {_rgba(surface_bright, 0.55 if is_dark else 0.85)};
+        border-radius: 18px;
+        border: 1px solid {outline_idle};
+        padding: 6px 12px;
+        color: {_rgb(on_surface)};
+        font-size: 10pt;
+        caret-color: {_rgb(primary)};
+        box-shadow: none;
+        transition: border-color 160ms ease;
+    }}
+    .search:focus {{
+        border-color: {_rgba(primary, 0.85)};
+    }}
+
+    /* ── M3 filter chips ── */
+    .chips {{ spacing: 8px; }}
+    .chip {{
+        background-color: {chip_bg_idle};
+        border: 1px solid {outline_idle};
+        border-radius: 14px;
+        padding: 4px 14px;
+        color: {_rgb(on_surface)};
+        font-size: 9.5pt;
+        font-weight: 500;
+        min-height: 20px;
+        transition: background-color 140ms ease, border-color 140ms ease;
+    }}
+    .chip:hover {{
+        background-color: {chip_bg_hover};
+        border-color: {outline_hover};
+    }}
+    .chip:checked {{
+        background-color: {_rgb(primary)};
+        border-color: {_rgb(primary)};
+        color: {on_primary};
+    }}
+
+    /* ── Card grid ── */
+    .grid {{ background-color: transparent; }}
+    .grid row {{ background-color: transparent; }}
+
+    /* ── M3 card (filled, medium shape, state-layer on hover) ── */
+    .card {{
+        background-color: {_rgb(surface_bright)};
+        border-radius: {CR}px;
+        border: 1px solid {_rgba(outline, 0.14)};
+        padding: 0;
+        transition: background-color 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+    }}
+    .card:hover {{
+        background-color: {_rgba(surface_bright, 0.92)};
+        box-shadow: 0 4px 14px {_rgba(primary, 0.18)};
+        border-color: {_rgba(primary, 0.45)};
+    }}
+    .card.current {{
+        border-color: {_rgba(primary, 0.65)};
+        border-width: 2px;
+    }}
+    .card-inner {{ background-color: transparent; spacing: 0; }}
+
+    /* thumbnail: rounded top corners, image clipped to border-radius */
+    .thumb {{
+        background-color: {_rgb(surface_dim)};
+        border-radius: {CR}px {CR}px 0 0;
+        min-width: {int(CARD_WIDTH)}px;
+        min-height: {int(THUMB_HEIGHT)}px;
+    }}
+
+    .info {{
+        padding: 8px 12px;
+        background-color: transparent;
+    }}
+    .card-title {{
+        color: {_rgb(on_surface)};
+        font-size: 9.5pt;
+        font-weight: 600;
+    }}
+    .live {{
+        color: {_rgb(tertiary)};
+        font-weight: 700;
+        font-size: 9.5pt;
+        margin-right: 4px;
+    }}
+
+    /* ── M3 scrollbar ── */
+    .grid-scroll {{ background-color: transparent; border: none; }}
+    .grid-scroll scrollbar {{ background-color: transparent; }}
+    .grid-scroll trough {{ background-color: {_rgba(outline, 0.08)}; border-radius: 2px; }}
+    .grid-scroll scrollbar slider {{
+        background-color: {_rgba(primary, 0.45)};
+        border-radius: 2px;
+        min-width: 3px;
+        min-height: 28px;
+    }}
+    """
 
 
 class WallpaperPickerWindow(Gtk.Window):
-    """Main M3E GtkLayerShell Wallpaper Picker Window with Pro-Grade Search Input."""
+    """Material You wallpaper picker driven by native GTK widgets."""
 
     def __init__(self, lock_fd: int = None, pid_path: str = None):
         super().__init__(type=Gtk.WindowType.TOPLEVEL)
+        self.set_name("NyxNiriWallpaperPicker")
 
         self.lock_fd = lock_fd
         self.pid_path = pid_path
         self.palette = load_material_palette()
-        self.metrics = calculate_grid_metrics(1920.0, 1080.0)
+
+        # View state — must be initialized BEFORE scanner.scan(), whose
+        # pre-warm fires on_thumb_ready synchronously for cached thumbs.
+        self.active_cat_idx = 0
+        self.search_query = ""
+        self.is_dismissing = False
+        self._dismiss_timer = None
+        self.thumb_widgets = {}      # hash_id -> thumb Gtk.Box
+        self._applied_thumbs = set() # hash_ids that already got a CSS provider
 
         # Scanner and data
         self.scanner = WallpaperScanner(on_thumb_ready_cb=self.on_thumb_ready)
         self.scanner.scan()
         self.current_wp_path = self.scanner.get_current_wallpaper()
 
-        # View & Search state
-        self.active_cat_idx = 0
-        self.hover_cat_idx = None
-        self.hovered_card_idx = None
-        self.keyboard_selected_idx = None
-        self.search_query = ""
-        self.cursor_idx = 0
-        self.search_active = True
-        self.cursor_time = 0.0
-        self.is_dismissing = False
-        self._suppress_hover = False
-
-        self.chip_boxes = []
-        self.card_boxes = []
-        self.search_box = None
-        self.clear_box = None
-
-        # High-Fidelity Motion Springs Matrix
-        self.target_scroll_y = 0.0
-        self.scroll_spring = Spring(0.0, omega=26.0, zeta=0.92)
-        self.entry_spring = Spring(0.0, omega=18.0, zeta=0.82)
-        self.card_springs = {}
-
-        # Native Wayland CJK IME Context (Fcitx5 / IBus)
-        self.im_context = Gtk.IMMulticontext()
-        self.im_context.set_use_preedit(True)
-        self.im_context.connect("commit", self.on_im_commit)
-        self.im_context.connect("preedit-changed", lambda ctx: self._request_frame())
-
-        # FrameClock callback & cursor blink timer
-        self.tick_callback_id = None
-        self.cursor_timer_id = None
-        self.last_frame_time = 0
-
-        # Layer Shell Setup
+        # ── Wayland Layer-Shell overlay (unchanged from Cairo version) ──
         GtkLayerShell.init_for_window(self)
         GtkLayerShell.set_layer(self, GtkLayerShell.Layer.OVERLAY)
         GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.EXCLUSIVE)
         GtkLayerShell.set_exclusive_zone(self, -1)
-
-        for edge in (GtkLayerShell.Edge.LEFT, GtkLayerShell.Edge.RIGHT, GtkLayerShell.Edge.TOP, GtkLayerShell.Edge.BOTTOM):
+        for edge in (GtkLayerShell.Edge.LEFT, GtkLayerShell.Edge.RIGHT,
+                     GtkLayerShell.Edge.TOP, GtkLayerShell.Edge.BOTTOM):
             GtkLayerShell.set_anchor(self, edge, True)
             GtkLayerShell.set_margin(self, edge, 0)
 
@@ -93,736 +238,319 @@ class WallpaperPickerWindow(Gtk.Window):
         if visual:
             self.set_visual(visual)
 
-        self.add_events(
-            Gdk.EventMask.POINTER_MOTION_MASK
-            | Gdk.EventMask.BUTTON_PRESS_MASK
-            | Gdk.EventMask.BUTTON_RELEASE_MASK
-            | Gdk.EventMask.SCROLL_MASK
-            | Gdk.EventMask.SMOOTH_SCROLL_MASK
-            | Gdk.EventMask.KEY_PRESS_MASK
-            | Gdk.EventMask.KEY_RELEASE_MASK
-            | Gdk.EventMask.STRUCTURE_MASK
-        )
+        # ── Material You CSS ──
+        try:
+            provider = Gtk.CssProvider()
+            provider.load_from_data(_build_m3_css(self.palette).encode())
+            Gtk.StyleContext.add_provider_for_screen(
+                self.get_screen(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
+        except Exception as e:
+            print(f"CSS load error: {e}", file=sys.stderr)
 
-        self.connect("realize", self.on_realize)
-        self.connect("draw", self.on_draw)
-        self.connect("motion-notify-event", self.on_motion_notify)
+        self._build_ui()
+
+        self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.KEY_PRESS_MASK)
         self.connect("button-press-event", self.on_button_press)
-        self.connect("scroll-event", self.on_scroll)
         self.connect("key-press-event", self.on_key_press)
         self.connect("delete-event", lambda w, e: (self.dismiss_window(), True)[1])
         self.connect("destroy", lambda w: Gtk.main_quit())
 
-        self.open_window()
+        self.show_all()
+        self.search_entry.grab_focus()
         self.scanner.load_thumbnails_async()
 
-    def on_realize(self, widget):
-        gdk_window = self.get_window()
-        if gdk_window:
-            self.im_context.set_client_window(gdk_window)
+    # ── UI construction ──────────────────────────────────────────────────────
+    def _build_ui(self):
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL,
+                        halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
 
-    def on_thumb_ready(self, item):
-        """Called when a background thumbnail is ready to trigger instant visual repaint."""
-        self.queue_draw()
-        self._request_frame()
+        dialog = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        dialog.set_size_request(int(WIN_WIDTH), int(WIN_HEIGHT))
+        dialog.get_style_context().add_class("picker-dialog")
+        self.dialog = dialog
 
-    def _on_cursor_blink_timer(self):
-        if self.is_dismissing:
-            self.cursor_timer_id = None
-            return GLib.SOURCE_REMOVE
-        if self.search_active:
-            self.cursor_time += 0.5
-            self.queue_draw()
-        return GLib.SOURCE_CONTINUE
+        # Header: title + count + search
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        header.get_style_context().add_class("header")
+        title = Gtk.Label(label="Wallpapers")
+        title.get_style_context().add_class("header-title")
+        self.count_label = Gtk.Label(label=str(len(self.scanner.items)))
+        self.count_label.get_style_context().add_class("header-count")
+        header.pack_start(title, False, False, 0)
+        header.pack_start(self.count_label, False, False, 0)
+        spacer = Gtk.Box()
+        spacer.set_hexpand(True)
+        header.pack_start(spacer, True, True, 0)
 
-    def open_window(self):
-        self.palette = load_material_palette()
-        self.is_dismissing = False
-        self._suppress_hover = False
-        self.hovered_card_idx = None
-        self.hover_cat_idx = None
-        self.keyboard_selected_idx = None
-        self.entry_spring.omega = 16.0
-        self.entry_spring.zeta = 0.76
-        self.entry_spring.current = 0.0
-        self.entry_spring.target = 1.0
-        self.entry_spring.velocity = 0.0
-        self.search_active = True
-        self.cursor_idx = len(self.search_query)
+        self.search_entry = Gtk.SearchEntry()
+        self.search_entry.set_placeholder_text("Search wallpapers...")
+        self.search_entry.set_size_request(260, 36)
+        self.search_entry.get_style_context().add_class("search")
+        self.search_entry.connect("search-changed", self.on_search_changed)
+        self.search_entry.connect("stop-search", self.on_stop_search)
+        self.search_entry.connect("key-press-event", self.on_search_key_press)
+        self.search_entry.connect("activate", self.on_search_activate)
+        header.pack_end(self.search_entry, False, False, 0)
 
-        if self.cursor_timer_id is None:
-            self.cursor_timer_id = GLib.timeout_add(500, self._on_cursor_blink_timer)
+        dialog.pack_start(header, False, False, 0)
 
-        self.show_all()
-        self.present()
-        self.im_context.focus_in()
-        self._request_frame()
+        # Category chips (M3 filter chips, single-active radio group)
+        chips = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        chips.get_style_context().add_class("chips")
+        self.chip_buttons = []
+        for idx, cat in enumerate(self.scanner.categories):
+            btn = Gtk.ToggleButton(label=cat)
+            btn.get_style_context().add_class("chip")
+            btn.set_active(idx == 0)
+            btn.set_focus_on_click(False)
+            btn.connect("toggled", self.on_chip_toggled, idx)
+            chips.pack_start(btn, False, False, 0)
+            self.chip_buttons.append(btn)
+        dialog.pack_start(chips, False, False, 0)
 
-    def dismiss_window(self):
-        if self.is_dismissing:
-            return
-        self.is_dismissing = True
-        self._suppress_hover = True
-        self.hovered_card_idx = None
-        self.hover_cat_idx = None
-        if self.cursor_timer_id is not None:
-            GLib.source_remove(self.cursor_timer_id)
-            self.cursor_timer_id = None
-        self.im_context.focus_out()
-        self.entry_spring.omega = 19.0
-        self.entry_spring.zeta = 0.88
-        self.entry_spring.target = 0.0
-        self._request_frame()
+        # Card grid (native FlowBox: lazy render + kinetic scroll + arrow nav)
+        self.flowbox = Gtk.FlowBox()
+        self.flowbox.set_min_children_per_line(GRID_COLS)
+        self.flowbox.set_max_children_per_line(GRID_COLS)
+        self.flowbox.set_homogeneous(True)
+        self.flowbox.set_column_spacing(int(GAP_X))
+        self.flowbox.set_row_spacing(int(GAP_Y))
+        self.flowbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.flowbox.set_activate_on_single_click(True)
+        self.flowbox.get_style_context().add_class("grid")
+        self.flowbox.connect("child-activated", self.on_child_activated)
+        self.flowbox.connect("key-press-event", self.on_grid_key_press)
 
-    def _finish_dismiss(self):
-        if self.cursor_timer_id is not None:
-            GLib.source_remove(self.cursor_timer_id)
-            self.cursor_timer_id = None
-        self.scanner.shutdown()
-        release_instance_lock(self.lock_fd, self.pid_path)
-        self.lock_fd = None
-        self.hide()
-        Gtk.main_quit()
+        scroll = Gtk.ScrolledWindow()
+        scroll.get_style_context().add_class("grid-scroll")
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_min_content_height(494)
+        scroll.add(self.flowbox)
+        dialog.pack_start(scroll, True, True, 0)
 
-    def _request_frame(self):
-        if self.tick_callback_id is None:
-            self.last_frame_time = 0
-            self.tick_callback_id = self.add_tick_callback(self.on_frame_tick)
+        outer.add(dialog)
+        self.add(outer)
 
-    def on_frame_tick(self, widget, frame_clock):
-        frame_time = frame_clock.get_frame_time()
-        dt = 0.016 if self.last_frame_time == 0 else (frame_time - self.last_frame_time) / 1_000_000.0
-        self.last_frame_time = frame_time
+        for item in self.scanner.items:
+            self.flowbox.add(self._make_card(item))
+        self.flowbox.set_filter_func(self._filter_func)
+        self._refresh_count()
 
-        still_animating = False
+    def _make_card(self, item):
+        child = Gtk.FlowBoxChild()
+        child.get_style_context().add_class("card")
+        if item.path == self.current_wp_path:
+            child.get_style_context().add_class("current")
+        child.item = item
 
-        if self.entry_spring.update(dt):
-            still_animating = True
+        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        inner.get_style_context().add_class("card-inner")
 
-        if self.is_dismissing and self.entry_spring.current <= 0.005:
-            self._finish_dismiss()
-            self.tick_callback_id = None
-            return GLib.SOURCE_REMOVE
+        thumb = Gtk.Box()
+        thumb.get_style_context().add_class("thumb")
+        inner.pack_start(thumb, False, False, 0)
+        self.thumb_widgets[item.hash_id] = thumb
+        # Thumbnail is applied later via on_thumb_ready (single path, dedup'd),
+        # so cached and async-generated thumbs both flow through the same gate.
 
-        # Update smooth scrolling spring
-        self.scroll_spring.target = self.target_scroll_y
-        if self.scroll_spring.update(dt):
-            still_animating = True
+        info = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        info.get_style_context().add_class("info")
+        if item.is_video:
+            live = Gtk.Label(label="[Live]")
+            live.get_style_context().add_class("live")
+            info.pack_start(live, False, False, 0)
+        title_lbl = Gtk.Label(label=item.title)
+        title_lbl.get_style_context().add_class("card-title")
+        title_lbl.set_ellipsize(Pango.EllipsizeMode.END)
+        title_lbl.set_max_width_chars(28)
+        info.pack_start(title_lbl, False, False, 0)
+        inner.pack_start(info, False, False, 0)
 
-        # Update active card elevation springs
-        active_keys = list(self.card_springs.keys())
-        for idx in active_keys:
-            is_hl = (self.hovered_card_idx == idx or self.keyboard_selected_idx == idx) and not self.is_dismissing
-            self.card_springs[idx].target = 1.0 if is_hl else 0.0
-            if self.card_springs[idx].update(dt):
-                still_animating = True
-            elif not is_hl and abs(self.card_springs[idx].current) < 0.005:
-                del self.card_springs[idx]
+        child.add(inner)
+        return child
 
-        self.queue_draw()
+    def _apply_thumb(self, thumb_box, thumb_path):
+        """Render a thumbnail via CSS background-image (rounded-top, cover).
 
-        if not still_animating:
-            self.tick_callback_id = None
-            return GLib.SOURCE_REMOVE
-
-        return GLib.SOURCE_CONTINUE
-
-    def get_current_items(self) -> list:
-        """Get filtered wallpaper items based on active category and search query."""
-        if self.search_query.strip():
-            q = self.search_query.strip().lower()
-            return [it for it in self.scanner.items if q in it.title.lower() or q in it.filename.lower()]
-
-        if 0 <= self.active_cat_idx < len(self.scanner.categories):
-            cat_name = self.scanner.categories[self.active_cat_idx]
-            return self.scanner.category_items.get(cat_name, [])
-        return self.scanner.items
-
-    def select_and_apply(self, item):
-        """Apply selected wallpaper in background thread and dismiss immediately."""
-        self._suppress_hover = True
-        self.hovered_card_idx = None
-        self.hover_cat_idx = None
-        self.dismiss_window()
-        threading.Thread(target=apply_wallpaper, args=(item,), daemon=False).start()
-
-    def get_max_scroll_y(self) -> float:
-        """Calculate maximum vertical scroll offset for current item collection."""
-        items = self.get_current_items()
-        metrics = self.metrics
-        total_rows = math.ceil(len(items) / metrics.columns)
-        total_h = total_rows * (metrics.card_height + metrics.gap_y)
-        return max(0.0, total_h - metrics.grid_height + 16.0)
-
-    def scroll_to_make_visible(self, item_idx: int):
-        """Adjust target_scroll_y to ensure the focused card is visible within the viewport."""
-        metrics = self.metrics
-        row = item_idx // metrics.columns
-        card_top = row * (metrics.card_height + metrics.gap_y)
-        card_bottom = card_top + metrics.card_height
-
-        curr_view_top = self.target_scroll_y
-        curr_view_bottom = curr_view_top + metrics.grid_height
-
-        if card_top < curr_view_top:
-            self.target_scroll_y = card_top
-        elif card_bottom > curr_view_bottom:
-            self.target_scroll_y = card_bottom - metrics.grid_height + 16.0
-
-        max_scroll = self.get_max_scroll_y()
-        self.target_scroll_y = max(0.0, min(max_scroll, self.target_scroll_y))
-        self._request_frame()
-
-    def on_draw(self, widget, cr):
-        entry_val = max(0.0, min(1.0, self.entry_spring.current))
-        if entry_val <= 0.001:
-            return False
-
-        win_w = self.get_allocated_width() or 1920
-        win_h = self.get_allocated_height() or 1080
-
-        # Hermite smoothstep cubic curve for silky non-linear alpha & spatial scale
-        t = entry_val
-        alpha = t * t * (3.0 - 2.0 * t)
-        scale = 0.96 + 0.04 * t
-
-        self.metrics = calculate_grid_metrics(win_w, win_h)
-        metrics = self.metrics
-        dialog_w = metrics.dialog_width
-        dialog_h = metrics.dialog_height
-        dialog_x = (win_w - dialog_w) / 2.0
-        dialog_y = (win_h - dialog_h) / 2.0 + (1.0 - t) * 12.0
-
-        # Render dialog in an isolated group with smooth centered micro-scale transform
-        cr.save()
-        cr.translate(win_w / 2.0, win_h / 2.0)
-        cr.scale(scale, scale)
-        cr.translate(-win_w / 2.0, -win_h / 2.0)
-        cr.push_group()
-
-        # Dialog Frosted Glass Container with Multi-Tier Diffuse Shadow
-        draw_dialog_container(cr, dialog_x, dialog_y, dialog_w, dialog_h, metrics.radius, self.palette)
-
-        # Top Header & Pro-Grade Search Pill
-        all_count = len(self.scanner.items)
-        self.search_box, self.clear_box, cursor_rect = draw_header(
-            cr, dialog_x, dialog_y, dialog_w,
-            total_count=all_count,
-            search_query=self.search_query,
-            search_active=self.search_active,
-            cursor_idx=self.cursor_idx,
-            cursor_time=self.cursor_time,
-            palette=self.palette,
-            create_layout_fn=self.create_pango_layout
+        Off-screen cards never decode this; GTK releases the decoded pixbuf
+        when the widget leaves the viewport. This is the lazy-load/release
+        memory model that the Cairo version lacked.
+        """
+        provider = Gtk.CssProvider()
+        uri = "file://" + thumb_path.replace('"', "")
+        css = (
+            f'.thumb {{ background-image: url("{uri}");'
+            f' background-size: cover; background-position: center; }}'
         )
-
-        # Sync Wayland CJK IME cursor location precisely under caret
-        if self.search_active and cursor_rect:
-            rect = Gdk.Rectangle()
-            rect.x, rect.y, rect.width, rect.height = int(cursor_rect[0]), int(cursor_rect[1]), int(cursor_rect[2]), int(cursor_rect[3])
-            self.im_context.set_cursor_location(rect)
-
-        # Category Chips
-        chips_y = dialog_y + 68.0
-        self.chip_boxes = draw_category_chips(
-            cr, dialog_x, chips_y, dialog_w,
-            categories=self.scanner.categories,
-            active_cat_idx=self.active_cat_idx,
-            hover_cat_idx=self.hover_cat_idx,
-            palette=self.palette,
-            create_layout_fn=self.create_pango_layout
-        )
-
-        # Continuous Scrollable Card Grid
-        grid_x = dialog_x + metrics.grid_x
-        grid_y = dialog_y + metrics.grid_y
-        grid_w = metrics.grid_width
-        grid_h = metrics.grid_height
-
-        scroll_y = self.scroll_spring.current
-        items = self.get_current_items()
-        max_scroll_y = self.get_max_scroll_y()
-
-        # Viewport clipping with safe padding
-        cr.save()
-        cr.rectangle(dialog_x + 16.0, grid_y, dialog_w - 32.0, grid_h)
-        cr.clip()
-
-        self.card_boxes = []
-
-        if not items:
-            if self.search_query.strip():
-                empty_title = "No wallpapers match"
-                empty_body = "Try a different search or clear the filter."
-            elif not self.scanner.items:
-                empty_title = "No wallpapers found"
-                empty_body = "Add images or videos to your wallpaper folder, then reopen this picker."
-            else:
-                empty_title = "Nothing in this category"
-                empty_body = "Choose another category or add a matching wallpaper."
-            draw_empty_state(
-                cr, grid_x, grid_y, grid_w, grid_h, empty_title, empty_body,
-                self.palette, self.create_pango_layout,
+        try:
+            provider.load_from_data(css.encode())
+            thumb_box.get_style_context().add_provider(
+                provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1
             )
+        except Exception as e:
+            print(f"thumb apply error: {e}", file=sys.stderr)
 
-        for idx, item in enumerate(items):
-            row = idx // metrics.columns
-            col = idx % metrics.columns
-            cx = grid_x + col * (metrics.card_width + metrics.gap_x)
-            cy = grid_y + 8.0 + row * (metrics.card_height + metrics.gap_y) - scroll_y
+    # ── Filtering ────────────────────────────────────────────────────────────
+    def _filter_func(self, child):
+        item = child.item
+        q = self.search_query.strip().lower()
+        if q:
+            return q in item.title.lower() or q in item.filename.lower()
+        if self.active_cat_idx == 0:
+            return True  # All
+        cat = self.scanner.categories[self.active_cat_idx]
+        if cat == "Static":
+            return not item.is_video
+        if cat == "Live":
+            return item.is_video
+        return item.category == cat
 
-            self.card_boxes.append((cx, cy, metrics.card_width, metrics.card_height))
+    def _visible_children(self):
+        return [c for c in self.flowbox.get_children() if self._filter_func(c)]
 
-            # Render visible cards
-            if cy + metrics.card_height >= grid_y - 20.0 and cy <= grid_y + grid_h + 20.0:
-                is_cur = (item.path == self.current_wp_path)
-                is_active = (self.keyboard_selected_idx == idx)
-                is_hover = (self.hovered_card_idx == idx)
+    def _refresh_count(self):
+        self.count_label.set_text(str(len(self._visible_children())))
 
-                if is_active or is_hover:
-                    if idx not in self.card_springs:
-                        self.card_springs[idx] = Spring(0.0, omega=26.0, zeta=0.92)
-                hover_val = self.card_springs[idx].current if idx in self.card_springs else 0.0
+    # ── Signal handlers ───────────────────────────────────────────────────────
+    def on_search_changed(self, entry):
+        self.search_query = entry.get_text()
+        self.flowbox.invalidate_filter()
+        self._refresh_count()
 
-                draw_card(
-                    cr, cx, cy, metrics.card_width, metrics.card_height, item,
-                    is_active=is_active,
-                    is_hovered=is_hover,
-                    is_current=is_cur,
-                    hover_val=hover_val,
-                    palette=self.palette,
-                    create_layout_fn=self.create_pango_layout
-                )
+    def on_stop_search(self, entry):
+        # SearchEntry emits stop-search on Esc-with-empty-text
+        if not self.search_query:
+            self.dismiss_window()
 
-        cr.restore()
-
-        # Minimalist Scrollbar Indicator
-        sb_x = dialog_x + dialog_w - 20.0
-        draw_scrollbar(cr, sb_x, grid_y, grid_h, scroll_y, max_scroll_y, self.palette)
-
-        # Composite the entire dialog group seamlessly with Hermite cubic alpha
-        cr.pop_group_to_source()
-        cr.paint_with_alpha(alpha)
-        cr.restore()
-
-        if self.hovered_card_idx is None and not self.is_dismissing and not self._suppress_hover:
-            self._update_hover_from_pointer()
-
+    def on_search_key_press(self, entry, event):
+        if event.keyval == Gdk.KEY_Down:
+            children = self._visible_children()
+            if children:
+                self.flowbox.grab_focus()
+                self.flowbox.select_child(children[0])
+            return True
         return False
 
-    def on_im_commit(self, im_context, text):
-        self.search_active = True
-        self.cursor_time = 0.0
-        self.search_query = self.search_query[:self.cursor_idx] + text + self.search_query[self.cursor_idx:]
-        self.cursor_idx += len(text)
-        self.target_scroll_y = 0.0
-        self.keyboard_selected_idx = 0
-        self._request_frame()
+    def on_search_activate(self, entry):
+        children = self._visible_children()
+        if children:
+            self.select_and_apply(children[0].item)
 
-    def _check_hover(self, mx: float, my: float):
-        if self.is_dismissing or self._suppress_hover:
+    def on_chip_toggled(self, btn, idx):
+        if not btn.get_active():
             return
+        # single-active radio group
+        for i, b in enumerate(self.chip_buttons):
+            if i != idx and b.get_active():
+                b.handler_block_by_func(self.on_chip_toggled)
+                b.set_active(False)
+                b.handler_unblock_by_func(self.on_chip_toggled)
+        self.active_cat_idx = idx
+        self.flowbox.invalidate_filter()
+        self._refresh_count()
+        self.search_entry.grab_focus()
 
-        # Check Category Chips
-        new_hover_cat = None
-        for idx, (bx, by, bw, bh) in enumerate(self.chip_boxes):
-            if bx <= mx <= bx + bw and by <= my <= by + bh:
-                new_hover_cat = idx
-                break
+    def on_child_activated(self, box, child):
+        self.select_and_apply(child.item)
 
-        if new_hover_cat != self.hover_cat_idx:
-            self.hover_cat_idx = new_hover_cat
-            self._request_frame()
-
-        # Check Cards
-        new_hover_card = None
-        items = self.get_current_items()
-        for idx, (bx, by, bw, bh) in enumerate(self.card_boxes):
-            if idx < len(items) and self._hit_test_card(mx, my, bx, by, bw, bh):
-                new_hover_card = idx
-                break
-
-        if new_hover_card != self.hovered_card_idx:
-            self.hovered_card_idx = new_hover_card
-            self._request_frame()
-
-    def _hit_test_card(self, mx, my, bx, by, bw, bh):
-        return bx <= mx <= bx + bw and by - 8.0 <= my <= by + bh + 8.0
-
-    def _update_hover_from_pointer(self):
-        if self.is_dismissing or self._suppress_hover:
-            return
-        gdk_window = self.get_window()
-        if not gdk_window:
-            return
-        try:
-            display = gdk_window.get_display()
-            seat = display.get_default_seat() if display else None
-            pointer = seat.get_pointer() if seat else None
-            if pointer:
-                _, mx, my, _ = gdk_window.get_device_position_double(pointer)
-                self._check_hover(mx, my)
-        except Exception:
-            pass
-
-    def on_motion_notify(self, widget, event):
-        if self.is_dismissing or self._suppress_hover:
-            return True
-        self._check_hover(event.x, event.y)
-        return True
+    def on_grid_key_press(self, box, event):
+        # Up at the top row → hand focus back to the search bar
+        if event.keyval == Gdk.KEY_Up:
+            sel = self.flowbox.get_selected_children()
+            visible = self._visible_children()
+            if visible and (not sel or sel[0] == visible[0]):
+                self.search_entry.grab_focus()
+                return True
+        return False
 
     def on_button_press(self, widget, event):
         if self.is_dismissing:
             return True
-
-        # Right-click -> Dismiss or clear search
+        # Right / middle click → clear search, or dismiss if already empty
         if event.button in (2, 3):
             if self.search_query:
-                self.search_query = ""
-                self.cursor_idx = 0
-                self.search_active = True
-                self.target_scroll_y = 0.0
-                self._request_frame()
+                self.search_entry.set_text("")
             else:
                 self.dismiss_window()
             return True
-
-        # Left-click
-        if event.button == 1:
-            mx, my = event.x, event.y
-
-            # 1. Clicked Clear '×' button
-            if self.clear_box:
-                cx, cy, cw, ch = self.clear_box
-                if cx <= mx <= cx + cw and cy <= my <= cy + ch:
-                    self.search_query = ""
-                    self.cursor_idx = 0
-                    self.search_active = True
-                    self.target_scroll_y = 0.0
-                    self.keyboard_selected_idx = 0
-                    self._request_frame()
-                    return True
-
-            # 2. Clicked Search Pill
-            if self.search_box:
-                sx, sy, sw, sh = self.search_box
-                if sx <= mx <= sx + sw and sy <= my <= sy + sh:
-                    self.search_active = True
-                    self.cursor_idx = len(self.search_query)
-                    self._request_frame()
-                    return True
-
-            # 3. Clicked category chip
-            for idx, (bx, by, bw, bh) in enumerate(self.chip_boxes):
-                if bx <= mx <= bx + bw and by <= my <= by + bh:
-                    self.active_cat_idx = idx
-                    self.target_scroll_y = 0.0
-                    self.keyboard_selected_idx = None
-                    self._request_frame()
-                    self._update_hover_from_pointer()
-                    return True
-
-            # 4. Clicked card
-            items = self.get_current_items()
-            for idx, (bx, by, bw, bh) in enumerate(self.card_boxes):
-                if idx < len(items) and self._hit_test_card(mx, my, bx, by, bw, bh):
-                    self.select_and_apply(items[idx])
-                    return True
-
-            # 5. Clicked outside dialog -> dismiss
-            win_w = self.get_allocated_width() or 1920
-            win_h = self.get_allocated_height() or 1080
-            metrics = calculate_grid_metrics(win_w, win_h)
-            dialog_w = metrics.dialog_width
-            dialog_h = metrics.dialog_height
-            dialog_x = (win_w - dialog_w) / 2.0
-            dialog_y = (win_h - dialog_h) / 2.0
-            if not (dialog_x <= mx <= dialog_x + dialog_w and dialog_y <= my <= dialog_y + dialog_h):
-                self.dismiss_window()
-                return True
-
-        return False
-
-    def on_scroll(self, widget, event):
-        """Handle smooth continuous scrolling for both touchpad and mouse wheel."""
-        if self.is_dismissing:
-            return False
-
-        max_scroll_y = self.get_max_scroll_y()
-        if max_scroll_y <= 0:
-            return False
-
-        handled = False
-        # 1. High-precision Touchpad & Smooth Wheel
-        if event.direction == Gdk.ScrollDirection.SMOOTH:
-            success, dx, dy = event.get_scroll_deltas()
-            if success:
-                self.target_scroll_y += dy * 45.0
-                self.target_scroll_y = max(0.0, min(max_scroll_y, self.target_scroll_y))
-                self._request_frame()
-                handled = True
-
-        # 2. Discrete Mouse Wheel
-        elif event.direction == Gdk.ScrollDirection.DOWN:
-            self.target_scroll_y += 120.0
-            self.target_scroll_y = max(0.0, min(max_scroll_y, self.target_scroll_y))
-            self._request_frame()
-            handled = True
-        elif event.direction == Gdk.ScrollDirection.UP:
-            self.target_scroll_y -= 120.0
-            self.target_scroll_y = max(0.0, min(max_scroll_y, self.target_scroll_y))
-            self._request_frame()
-            handled = True
-
-        if handled:
-            self._update_hover_from_pointer()
+        # Left click outside the dialog → dismiss
+        if event.button == 1 and self._click_outside_dialog(event.x, event.y):
+            self.dismiss_window()
             return True
-
         return False
+
+    def _click_outside_dialog(self, x, y):
+        wa = self.get_allocation()
+        da = self.dialog.get_allocation()
+        if da.width == 0 or da.height == 0 or wa.width == 0:
+            return False
+        # dialog is centered in the (fullscreen) window
+        dx = (wa.width - da.width) // 2
+        dy = (wa.height - da.height) // 2
+        return not (dx <= x <= dx + da.width and dy <= y <= dy + da.height)
 
     def on_key_press(self, widget, event):
         if self.is_dismissing:
             return True
-
         keyval = event.keyval
         ctrl = bool(event.state & Gdk.ModifierType.CONTROL_MASK)
 
-        # 1. IME Processing
-        if self.im_context.filter_keypress(event):
+        # Ctrl+R → apply a random wallpaper from the visible set
+        if ctrl and keyval in (Gdk.KEY_r, Gdk.KEY_R):
+            self._apply_random()
             return True
 
-        # 2. Ctrl Shortcuts
-        if ctrl:
-            if keyval in (Gdk.KEY_r, Gdk.KEY_R):
-                items = self.get_current_items()
-                if items:
-                    target = random.choice(items)
-                    self.select_and_apply(target)
-                return True
-            elif keyval in (Gdk.KEY_v, Gdk.KEY_V):
-                clip = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-                text = clip.wait_for_text()
-                if text:
-                    self.search_active = True
-                    self.search_query = self.search_query[:self.cursor_idx] + text.strip() + self.search_query[self.cursor_idx:]
-                    self.cursor_idx += len(text.strip())
-                    self.target_scroll_y = 0.0
-                    self.keyboard_selected_idx = 0
-                    self._request_frame()
-                return True
-            elif keyval in (Gdk.KEY_c, Gdk.KEY_C):
-                if self.search_query:
-                    clip = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-                    clip.set_text(self.search_query, -1)
-                return True
-            elif keyval in (Gdk.KEY_u, Gdk.KEY_U):
-                self.search_query = ""
-                self.cursor_idx = 0
-                self.target_scroll_y = 0.0
-                self.keyboard_selected_idx = 0
-                self._request_frame()
-                return True
-            elif keyval in (Gdk.KEY_a, Gdk.KEY_A):
-                self.cursor_idx = 0
-                self._request_frame()
-                return True
-            elif keyval in (Gdk.KEY_e, Gdk.KEY_E):
-                self.cursor_idx = len(self.search_query)
-                self._request_frame()
-                return True
-            elif keyval in (Gdk.KEY_l, Gdk.KEY_L):
-                self.search_query = ""
-                self.cursor_idx = 0
-                self.target_scroll_y = 0.0
-                self.keyboard_selected_idx = 0
-                self._request_frame()
-                return True
-            elif keyval in (Gdk.KEY_w, Gdk.KEY_W):
-                before = self.search_query[:self.cursor_idx]
-                after = self.search_query[self.cursor_idx:]
-                words = before.rstrip().rsplit(None, 1)
-                new_before = words[0] if len(words) > 1 else ""
-                self.cursor_idx = len(new_before)
-                self.search_query = new_before + after
-                self.target_scroll_y = 0.0
-                self._request_frame()
-                return True
-
-        # 3. Escape
+        # Esc outside the search bar → clear search, or dismiss if already empty
         if keyval == Gdk.KEY_Escape:
             if self.search_query:
-                self.search_query = ""
-                self.cursor_idx = 0
-                self.target_scroll_y = 0.0
-                self._request_frame()
+                self.search_entry.set_text("")
+                self.search_entry.grab_focus()
             else:
                 self.dismiss_window()
-            return True
-
-        # 4. Cursor Left / Right / Home / End
-        if keyval == Gdk.KEY_Left:
-            if self.search_active and self.search_query:
-                if self.cursor_idx > 0:
-                    self.cursor_idx -= 1
-                    self._request_frame()
-                return True
-            items = self.get_current_items()
-            num_items = len(items)
-            if num_items == 0:
-                return True
-            if self.keyboard_selected_idx is None:
-                self.keyboard_selected_idx = 0
-            else:
-                col = self.keyboard_selected_idx % self.metrics.columns
-                if col > 0 and self.keyboard_selected_idx - 1 >= 0:
-                    self.keyboard_selected_idx -= 1
-            self.scroll_to_make_visible(self.keyboard_selected_idx)
-            self._request_frame()
-            return True
-        elif keyval == Gdk.KEY_Right:
-            if self.search_active and self.search_query:
-                if self.cursor_idx < len(self.search_query):
-                    self.cursor_idx += 1
-                    self._request_frame()
-                return True
-            items = self.get_current_items()
-            num_items = len(items)
-            if num_items == 0:
-                return True
-            if self.keyboard_selected_idx is None:
-                self.keyboard_selected_idx = 0
-            else:
-                col = self.keyboard_selected_idx % self.metrics.columns
-                if col < self.metrics.columns - 1 and self.keyboard_selected_idx + 1 < num_items:
-                    self.keyboard_selected_idx += 1
-            self.scroll_to_make_visible(self.keyboard_selected_idx)
-            self._request_frame()
-            return True
-        elif keyval == Gdk.KEY_Home:
-            if self.search_active and self.search_query:
-                self.cursor_idx = 0
-                self._request_frame()
-                return True
-            self.keyboard_selected_idx = 0
-            self.scroll_to_make_visible(0)
-            self._request_frame()
-            return True
-        elif keyval == Gdk.KEY_End:
-            if self.search_active and self.search_query:
-                self.cursor_idx = len(self.search_query)
-                self._request_frame()
-                return True
-            items = self.get_current_items()
-            num_items = len(items)
-            if num_items > 0:
-                self.keyboard_selected_idx = num_items - 1
-                self.scroll_to_make_visible(self.keyboard_selected_idx)
-                self._request_frame()
-            return True
-
-        # 5. Backspace & Delete at Cursor Index
-        if keyval == Gdk.KEY_BackSpace:
-            if ctrl:
-                before = self.search_query[:self.cursor_idx]
-                after = self.search_query[self.cursor_idx:]
-                words = before.rstrip().rsplit(None, 1)
-                new_before = words[0] if len(words) > 1 else ""
-                self.cursor_idx = len(new_before)
-                self.search_query = new_before + after
-                self.target_scroll_y = 0.0
-                self.keyboard_selected_idx = 0
-                self._request_frame()
-                return True
-            if self.cursor_idx > 0:
-                self.cursor_time = 0.0
-                self.search_query = self.search_query[:self.cursor_idx - 1] + self.search_query[self.cursor_idx:]
-                self.cursor_idx -= 1
-                self.target_scroll_y = 0.0
-                self.keyboard_selected_idx = 0
-                self._request_frame()
-            elif not self.search_query:
-                self.dismiss_window()
-            return True
-
-        if keyval == Gdk.KEY_Delete:
-            if self.cursor_idx < len(self.search_query):
-                self.cursor_time = 0.0
-                self.search_query = self.search_query[:self.cursor_idx] + self.search_query[self.cursor_idx + 1:]
-                self.target_scroll_y = 0.0
-                self._request_frame()
-            return True
-
-        # 6. Tab / Shift+Tab for Category Chips
-        if keyval in (Gdk.KEY_Tab, Gdk.KEY_ISO_Left_Tab):
-            step = -1 if bool(event.state & Gdk.ModifierType.SHIFT_MASK) or keyval == Gdk.KEY_ISO_Left_Tab else 1
-            self.active_cat_idx = (self.active_cat_idx + step) % len(self.scanner.categories)
-            self.target_scroll_y = 0.0
-            self.keyboard_selected_idx = None
-            self._request_frame()
-            self._update_hover_from_pointer()
-            return True
-
-        # 7. Navigation (Arrow Down / Up -> Select within Card Grid)
-        items = self.get_current_items()
-        num_items = len(items)
-
-        if keyval == Gdk.KEY_Down:
-            if num_items == 0:
-                return True
-            if self.keyboard_selected_idx is None:
-                self.keyboard_selected_idx = 0
-            elif self.keyboard_selected_idx + self.metrics.columns < num_items:
-                self.keyboard_selected_idx += self.metrics.columns
-            else:
-                self.keyboard_selected_idx = num_items - 1
-            self.scroll_to_make_visible(self.keyboard_selected_idx)
-            self._request_frame()
-            return True
-        elif keyval == Gdk.KEY_Up:
-            if num_items == 0:
-                return True
-            if self.keyboard_selected_idx is None:
-                self.keyboard_selected_idx = 0
-            elif self.keyboard_selected_idx >= self.metrics.columns:
-                self.keyboard_selected_idx -= self.metrics.columns
-            else:
-                self.keyboard_selected_idx = 0
-            self.scroll_to_make_visible(self.keyboard_selected_idx)
-            self._request_frame()
-            return True
-
-        if keyval in (Gdk.KEY_Page_Up, Gdk.KEY_Page_Down):
-            if num_items == 0:
-                return True
-            visible_rows = max(1, int(self.metrics.grid_height // (self.metrics.card_height + self.metrics.gap_y)))
-            if self.keyboard_selected_idx is None:
-                self.keyboard_selected_idx = 0
-            delta = visible_rows * self.metrics.columns
-            if keyval == Gdk.KEY_Page_Up:
-                self.keyboard_selected_idx = max(0, self.keyboard_selected_idx - delta)
-            else:
-                self.keyboard_selected_idx = min(num_items - 1, self.keyboard_selected_idx + delta)
-            self.scroll_to_make_visible(self.keyboard_selected_idx)
-            self._request_frame()
-            return True
-
-        # 8. Enter -> Apply selected wallpaper
-        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
-            if self.keyboard_selected_idx is not None and 0 <= self.keyboard_selected_idx < num_items:
-                self.select_and_apply(items[self.keyboard_selected_idx])
-            elif num_items > 0:
-                self.select_and_apply(items[0])
-            return True
-
-        # 9. Printable Text Typing (Inserted at cursor_idx)
-        if 32 <= keyval <= 126 and not ctrl:
-            char = chr(keyval)
-            self.cursor_time = 0.0
-            self.search_query = self.search_query[:self.cursor_idx] + char + self.search_query[self.cursor_idx:]
-            self.cursor_idx += 1
-            self.target_scroll_y = 0.0
-            self.keyboard_selected_idx = 0
-            self._request_frame()
             return True
 
         return False
+
+    # ── Apply ─────────────────────────────────────────────────────────────────
+    def select_and_apply(self, item):
+        self.dismiss_window()
+        threading.Thread(target=apply_wallpaper, args=(item,), daemon=False).start()
+
+    def _apply_random(self):
+        items = [c.item for c in self._visible_children()]
+        if items:
+            self.select_and_apply(random.choice(items))
+
+    # ── Thumbnail callback ────────────────────────────────────────────────────
+    def on_thumb_ready(self, item):
+        """Scanner fired: apply the freshly-generated thumb file to its card.
+
+        Called from multiple paths (pre-warm sync, pre-warm idle, load_thumbnails
+        async, worker idle), so dedup on _applied_thumbs to avoid stacking
+        CssProviders on the same style context.
+        """
+        if item.hash_id in self._applied_thumbs:
+            return
+        thumb = self.thumb_widgets.get(item.hash_id)
+        if thumb and os.path.isfile(item.thumb_path):
+            self._applied_thumbs.add(item.hash_id)
+            self._apply_thumb(thumb, item.thumb_path)
+
+    # ── Dismiss (fade out + release lock + quit) ──────────────────────────────
+    def dismiss_window(self):
+        if self.is_dismissing:
+            return
+        self.is_dismissing = True
+        self.dialog.get_style_context().add_class("dismissing")
+        self._dismiss_timer = GLib.timeout_add(240, self._finish_dismiss)
+
+    def _finish_dismiss(self):
+        if self._dismiss_timer is not None:
+            GLib.source_remove(self._dismiss_timer)
+            self._dismiss_timer = None
+        release_instance_lock(self.lock_fd, self.pid_path)
+        self.lock_fd = None
+        self.hide()
+        Gtk.main_quit()
+        return GLib.SOURCE_REMOVE

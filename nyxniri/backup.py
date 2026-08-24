@@ -89,13 +89,15 @@ def backup_configs(note: str = "", interactive: bool = True) -> Optional[Path]:
         if cfg_path.exists() or cfg_path.is_symlink():
             target = tmp_dir / item
             _copy_path(cfg_path, target)
-            print(msg("log_backup_item", item))
+            if interactive:
+                print(msg("log_backup_item", item))
 
     if note.strip():
         (tmp_dir / "note.txt").write_text(note.strip(), encoding="utf-8")
 
     tmp_dir.rename(backup_dir)
-    print(msg("backup_done", str(backup_dir)))
+    if interactive:
+        print(msg("backup_done", str(backup_dir)))
     log_msg("INFO", f"Created configuration snapshot at {backup_dir}")
     return backup_dir
 
@@ -209,7 +211,7 @@ def rollback_configs(target_arg: str = "") -> bool:
     print(msg("rolling_back", chosen_backup.name))
 
     # Auto pre-rollback snapshot
-    pre_snap = backup_configs(note="pre_rollback_backup", interactive=False)
+    pre_snap = backup_configs(note="pre-rollback safety snapshot", interactive=False)
     if pre_snap:
         print(msg("pre_rollback_backup", str(pre_snap)))
 
@@ -305,9 +307,21 @@ def uninstall_nyxniri(mode: str = "") -> bool:
     from nyxniri.deploy import config_destination, discover_config_items, managed_bin_sources
     from nyxniri.fcitx import fcitx_uninstall
     from nyxniri.greeter import greeter_uninstall
+    from nyxniri.gtktheme import gtktheme_uninstall
 
     env = get_env()
     items = discover_config_items()
+
+    # Legacy mode aliases → canonical names
+    if mode in ("1", "safe", "--safe"):
+        mode = "standard"
+    elif mode in ("2", "--restore"):
+        mode = "restore"
+    elif mode in ("3", "--purge"):
+        mode = "purge"
+
+    if not mode and not sys.stdin.isatty():
+        return False
 
     if not mode and sys.stdin.isatty():
         print(msg("uninstall_title"))
@@ -336,12 +350,16 @@ def uninstall_nyxniri(mode: str = "") -> bool:
         print(msg("purge_start"))
         try:
             fcitx_uninstall()
-        except Exception:
-            pass
+        except Exception as e:
+            log_msg("WARN", f"fcitx uninstall failed during purge: {e}")
+        try:
+            gtktheme_uninstall()
+        except Exception as e:
+            log_msg("WARN", f"gtk theme uninstall failed during purge: {e}")
         try:
             greeter_uninstall()
-        except Exception:
-            pass
+        except Exception as e:
+            log_msg("WARN", f"greeter uninstall failed during purge: {e}")
 
         for item in items:
             p = config_destination(item)
@@ -401,6 +419,16 @@ def uninstall_nyxniri(mode: str = "") -> bool:
 
     target_bin = env.home / ".local/bin" / CLI_CMD
     target_bin.unlink(missing_ok=True)
+
+    try:
+        fcitx_uninstall()
+    except Exception as e:
+        log_msg("WARN", f"fcitx uninstall failed: {e}")
+
+    try:
+        gtktheme_uninstall()
+    except Exception as e:
+        log_msg("WARN", f"gtk theme uninstall failed: {e}")
 
     print(msg("uninstall_archived", str(archive_dir)))
     print(msg("uninstall_done"))
