@@ -1,0 +1,3 @@
+# noctalia theme engine manifest
+[packages]
+chmod = ["theme-sync.sh", "wallpaper-hook.sh", "mpvpaper-sync.sh"]

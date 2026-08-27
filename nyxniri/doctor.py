@@ -18,20 +18,16 @@ from nyxniri.constants import (
     THEME_ENGINE,
 )
 from nyxniri.core import get_env, get_pics_dir, log_msg
-from nyxniri.i18n import get_lang, msg
+from nyxniri.i18n import msg, text
 
-
-def _text(zh: str, en: str) -> str:
-    """Select concise diagnostic text for the active interface language."""
-    return zh if get_lang() == "zh" else en
 
 def _check_compositor(env) -> None:
     xdg_curr = os.environ.get("XDG_CURRENT_DESKTOP", "")
     if xdg_curr.lower() == MAIN_WM.lower():
-        print(msg("doctor_ok", _text(f"合成器: {MAIN_WM} 正在运行", f"Compositor: {MAIN_WM} is running")))
+        print(msg("doctor_ok", text(f"合成器: {MAIN_WM} 正在运行", f"Compositor: {MAIN_WM} is running")))
     else:
-        current = xdg_curr or _text("未知", "Unknown")
-        print(msg("doctor_warn", _text(
+        current = xdg_curr or text("未知", "Unknown")
+        print(msg("doctor_warn", text(
             f"合成器: 当前桌面为 {current}，{MAIN_WM} 未运行",
             f"Compositor: current desktop is {current}; {MAIN_WM} is not running",
         )))
@@ -39,39 +35,39 @@ def _check_compositor(env) -> None:
 def _check_wayland_session(env) -> None:
     sess_file = Path(f"/usr/share/wayland-sessions/{MAIN_WM}.desktop")
     if sess_file.is_file():
-        print(msg("doctor_ok", _text(f"会话: {MAIN_WM} Wayland 入口已注册", f"Session: {MAIN_WM} Wayland entry is registered")))
+        print(msg("doctor_ok", text(f"会话: {MAIN_WM} Wayland 入口已注册", f"Session: {MAIN_WM} Wayland entry is registered")))
     else:
-        print(msg("doctor_warn", _text(f"会话: 缺少 {sess_file}", f"Session: {sess_file} is missing")))
+        print(msg("doctor_warn", text(f"会话: 缺少 {sess_file}", f"Session: {sess_file} is missing")))
 
 def _check_noctalia(env) -> None:
     if not shutil.which(THEME_ENGINE):
-        print(msg("doctor_err", _text(f"{THEME_ENGINE}: 未在 PATH 中找到", f"{THEME_ENGINE}: not found in PATH")))
+        print(msg("doctor_err", text(f"{THEME_ENGINE}: 未在 PATH 中找到", f"{THEME_ENGINE}: not found in PATH")))
     else:
         try:
             res = subprocess.run([THEME_ENGINE, "msg", "status"], capture_output=True, check=False)
             if res.returncode == 0:
-                print(msg("doctor_ok", _text(f"{THEME_ENGINE}: 守护进程响应正常", f"{THEME_ENGINE}: daemon is responding")))
+                print(msg("doctor_ok", text(f"{THEME_ENGINE}: 守护进程响应正常", f"{THEME_ENGINE}: daemon is responding")))
             else:
-                print(msg("doctor_err", _text(f"{THEME_ENGINE}: 守护进程未运行", f"{THEME_ENGINE}: daemon is not running")))
+                print(msg("doctor_err", text(f"{THEME_ENGINE}: 守护进程未运行", f"{THEME_ENGINE}: daemon is not running")))
         except Exception:
-            print(msg("doctor_err", _text(f"{THEME_ENGINE}: 守护进程未运行", f"{THEME_ENGINE}: daemon is not running")))
+            print(msg("doctor_err", text(f"{THEME_ENGINE}: 守护进程未运行", f"{THEME_ENGINE}: daemon is not running")))
 
 def _check_wallpapers(env) -> None:
     wp_dir = get_pics_dir() / "Wallpapers"
     if wp_dir.is_dir():
-        print(msg("doctor_ok", _text(f"壁纸目录: {wp_dir}", f"Wallpapers: {wp_dir}")))
+        print(msg("doctor_ok", text(f"壁纸目录: {wp_dir}", f"Wallpapers: {wp_dir}")))
     else:
-        print(msg("doctor_err", _text(f"壁纸目录不存在: {wp_dir}", f"Wallpapers directory is missing: {wp_dir}")))
+        print(msg("doctor_err", text(f"壁纸目录不存在: {wp_dir}", f"Wallpapers directory is missing: {wp_dir}")))
 
 def _check_core_deps(env) -> None:
     missing = 0
     for cmd in (MAIN_WM, THEME_ENGINE, "fish", "starship"):
         if not shutil.which(cmd):
-            print(msg("doctor_err", _text(f"依赖: PATH 中缺少 {cmd}", f"Dependency: {cmd} is missing from PATH")))
+            print(msg("doctor_err", text(f"依赖: PATH 中缺少 {cmd}", f"Dependency: {cmd} is missing from PATH")))
             missing += 1
     if missing == 0:
         tools = f"{MAIN_WM}, {THEME_ENGINE}, fish, starship"
-        print(msg("doctor_ok", _text(f"核心依赖已安装: {tools}", f"Core dependencies installed: {tools}")))
+        print(msg("doctor_ok", text(f"核心依赖已安装: {tools}", f"Core dependencies installed: {tools}")))
 
 def _check_scripts(env) -> None:
     config_dir = env.config_dir
@@ -92,24 +88,24 @@ def _check_scripts(env) -> None:
             full_path = config_dir / MAIN_WM / name
         if full_path.is_file():
             if os.access(full_path, os.X_OK):
-                print(msg("doctor_ok", _text(f"脚本可执行: {name}", f"Script is executable: {name}")))
+                print(msg("doctor_ok", text(f"脚本可执行: {name}", f"Script is executable: {name}")))
             else:
-                print(msg("doctor_warn", _text(f"脚本缺少执行权限，正在修复: {name}", f"Script was not executable; fixing: {name}")))
+                print(msg("doctor_warn", text(f"脚本缺少执行权限，正在修复: {name}", f"Script was not executable; fixing: {name}")))
                 full_path.chmod(0o755)
         elif name == "clean-cache":
-            print(msg("doctor_err", _text("脚本缺失: ~/.config/fish/clean-cache", "Script missing: ~/.config/fish/clean-cache")))
+            print(msg("doctor_err", text("脚本缺失: ~/.config/fish/clean-cache", "Script missing: ~/.config/fish/clean-cache")))
 
 def _check_eyecare(env) -> None:
     if shutil.which("wlsunset"):
-        print(msg("doctor_ok", _text("护眼模式: wlsunset 已安装", "Eye Care: wlsunset is installed")))
+        print(msg("doctor_ok", text("护眼模式: wlsunset 已安装", "Eye Care: wlsunset is installed")))
     else:
-        print(msg("doctor_warn", _text("护眼模式: 缺少 wlsunset", "Eye Care: wlsunset is missing")))
+        print(msg("doctor_warn", text("护眼模式: 缺少 wlsunset", "Eye Care: wlsunset is missing")))
 
 def _check_scratchpad(env) -> None:
     if shutil.which("tmux"):
-        print(msg("doctor_ok", _text("Scratchpad: tmux 已安装", "Scratchpad: tmux is installed")))
+        print(msg("doctor_ok", text("Scratchpad: tmux 已安装", "Scratchpad: tmux is installed")))
     else:
-        print(msg("doctor_warn", _text("Scratchpad: 缺少 tmux", "Scratchpad: tmux is missing")))
+        print(msg("doctor_warn", text("Scratchpad: 缺少 tmux", "Scratchpad: tmux is missing")))
 
 def _check_orbit(env) -> None:
     try:
@@ -118,43 +114,43 @@ def _check_orbit(env) -> None:
             capture_output=True, check=False,
         )
         if res.returncode == 0:
-            print(msg("doctor_ok", _text("Orbit: GtkLayerShell Python 运行环境可用", "Orbit: GtkLayerShell Python runtime is available")))
+            print(msg("doctor_ok", text("Orbit: GtkLayerShell Python 运行环境可用", "Orbit: GtkLayerShell Python runtime is available")))
         else:
-            print(msg("doctor_warn", _text(
+            print(msg("doctor_warn", text(
                 "Orbit: 缺少 GtkLayerShell Python 绑定，请安装 python-gobject 与 gtk-layer-shell",
                 "Orbit: GtkLayerShell Python bindings are missing; install python-gobject and gtk-layer-shell",
             )))
     except Exception:
-        print(msg("doctor_warn", _text("Orbit: 缺少 GtkLayerShell Python 绑定", "Orbit: GtkLayerShell Python bindings are missing")))
+        print(msg("doctor_warn", text("Orbit: 缺少 GtkLayerShell Python 绑定", "Orbit: GtkLayerShell Python bindings are missing")))
 
 def _check_shell(env) -> None:
     curr_shell = os.environ.get("SHELL", "")
     if "fish" in curr_shell:
-        print(msg("doctor_ok", _text(f"默认 Shell: fish ({curr_shell})", f"Default shell: fish ({curr_shell})")))
+        print(msg("doctor_ok", text(f"默认 Shell: fish ({curr_shell})", f"Default shell: fish ({curr_shell})")))
     else:
-        current = curr_shell or _text("未知", "Unknown")
-        print(msg("doctor_warn", _text(
+        current = curr_shell or text("未知", "Unknown")
+        print(msg("doctor_warn", text(
             f"默认 Shell: {current}；可运行 chsh -s /usr/bin/fish 切换",
             f"Default shell: {current}; use chsh -s /usr/bin/fish to switch",
         )))
 
 def _check_fisher(env) -> None:
     if (env.config_dir / "fish" / "fish_plugins").is_file():
-        print(msg("doctor_ok", _text("Fisher: fish_plugins 已部署", "Fisher: fish_plugins is deployed")))
+        print(msg("doctor_ok", text("Fisher: fish_plugins 已部署", "Fisher: fish_plugins is deployed")))
     else:
-        print(msg("doctor_warn", _text("Fisher: 缺少 ~/.config/fish/fish_plugins", "Fisher: ~/.config/fish/fish_plugins is missing")))
+        print(msg("doctor_warn", text("Fisher: 缺少 ~/.config/fish/fish_plugins", "Fisher: ~/.config/fish/fish_plugins is missing")))
 
 def _check_audio(env) -> None:
     if shutil.which("wpctl"):
-        print(msg("doctor_ok", _text("音频控制: wpctl (WirePlumber) 可用", "Audio Control: wpctl (WirePlumber) is available")))
+        print(msg("doctor_ok", text("音频控制: wpctl (WirePlumber) 可用", "Audio Control: wpctl (WirePlumber) is available")))
     else:
-        print(msg("doctor_warn", _text("音频控制: 缺少 wpctl", "Audio Control: wpctl is missing")))
+        print(msg("doctor_warn", text("音频控制: 缺少 wpctl", "Audio Control: wpctl is missing")))
 
 def _check_brightness(env) -> None:
     if shutil.which("ddcutil") or shutil.which("brightnessctl"):
-        print(msg("doctor_ok", _text("亮度控制: ddcutil / brightnessctl 可用", "Brightness Control: ddcutil / brightnessctl is available")))
+        print(msg("doctor_ok", text("亮度控制: ddcutil / brightnessctl 可用", "Brightness Control: ddcutil / brightnessctl is available")))
     else:
-        print(msg("doctor_warn", _text("亮度控制: 缺少 ddcutil 和 brightnessctl", "Brightness Control: ddcutil and brightnessctl are missing")))
+        print(msg("doctor_warn", text("亮度控制: 缺少 ddcutil 和 brightnessctl", "Brightness Control: ddcutil and brightnessctl are missing")))
 
 def _check_portal_active(env) -> None:
     portal_active = False
@@ -168,23 +164,23 @@ def _check_portal_active(env) -> None:
         except Exception:
             pass
     if portal_active:
-        print(msg("doctor_ok", _text("桌面门户: xdg-desktop-portal 正在运行", "Desktop Portal: xdg-desktop-portal is active")))
+        print(msg("doctor_ok", text("桌面门户: xdg-desktop-portal 正在运行", "Desktop Portal: xdg-desktop-portal is active")))
     else:
-        print(msg("doctor_warn", _text("桌面门户: xdg-desktop-portal 未运行", "Desktop Portal: xdg-desktop-portal is not active")))
+        print(msg("doctor_warn", text("桌面门户: xdg-desktop-portal 未运行", "Desktop Portal: xdg-desktop-portal is not active")))
 
 def _check_portal_gtk(env) -> None:
     if shutil.which("pacman"):
         res = subprocess.run(["pacman", "-Qq", "xdg-desktop-portal-gtk"], capture_output=True, check=False)
         if res.returncode == 0:
-            print(msg("doctor_ok", _text("桌面门户: xdg-desktop-portal-gtk 后端已安装", "Desktop Portal: xdg-desktop-portal-gtk backend is installed")))
+            print(msg("doctor_ok", text("桌面门户: xdg-desktop-portal-gtk 后端已安装", "Desktop Portal: xdg-desktop-portal-gtk backend is installed")))
         else:
-            print(msg("doctor_warn", _text("桌面门户: 缺少 xdg-desktop-portal-gtk", "Desktop Portal: xdg-desktop-portal-gtk is missing")))
+            print(msg("doctor_warn", text("桌面门户: 缺少 xdg-desktop-portal-gtk", "Desktop Portal: xdg-desktop-portal-gtk is missing")))
 
 def _check_portal_config(env) -> None:
     portal_conf = env.config_dir / "xdg-desktop-portal" / "niri-portals.conf"
     portal_conf2 = env.config_dir / "xdg-desktop-portal" / "portals.conf"
     if portal_conf.is_file() or portal_conf2.is_file():
-        print(msg("doctor_ok", _text("桌面门户: niri-portals.conf 路由已配置", "Desktop Portal: niri-portals.conf routing is configured")))
+        print(msg("doctor_ok", text("桌面门户: niri-portals.conf 路由已配置", "Desktop Portal: niri-portals.conf routing is configured")))
 
 _MIN_HOME_FREE_KIB = 10 * 1024 * 1024  # 10 GiB expressed in KiB
 _GIB_KIB = 1024 * 1024
@@ -203,44 +199,72 @@ def _check_disk_space(env) -> None:
                     free_human = f"{free_kb / _MIB_KIB:.1f} MiB"
                 else:
                     free_human = f"{free_kb} KiB"
-                print(msg("doctor_warn", _text(f"磁盘空间: $HOME 仅剩 {free_human}", f"Disk Space: only {free_human} free on $HOME")))
+                print(msg("doctor_warn", text(f"磁盘空间: $HOME 仅剩 {free_human}", f"Disk Space: only {free_human} free on $HOME")))
             else:
-                print(msg("doctor_ok", _text("磁盘空间: $HOME 空间充足", "Disk Space: sufficient free space on $HOME")))
+                print(msg("doctor_ok", text("磁盘空间: $HOME 空间充足", "Disk Space: sufficient free space on $HOME")))
     except Exception:
         pass
 
 def _check_fcitx_skin(env) -> None:
     if shutil.which("fcitx5") or (env.config_dir / "fcitx5" / "conf" / "classicui.conf").is_file():
-        from nyxniri.fcitx import fcitx_enabled
+        from nyxniri.modules.fcitx import fcitx_enabled
         if fcitx_enabled():
-            print(msg("doctor_ok", _text("Fcitx5: NyxMellow 皮肤已启用", "Fcitx5: NyxMellow skin is enabled")))
+            print(msg("doctor_ok", text("Fcitx5: NyxMellow 皮肤已启用", "Fcitx5: NyxMellow skin is enabled")))
         else:
-            print(msg("doctor_warn", _text(f"Fcitx5: {FCITX_THEME} 皮肤未启用", f"Fcitx5: {FCITX_THEME} skin not enabled")))
+            print(msg("doctor_warn", text(f"Fcitx5: {FCITX_THEME} 皮肤未启用", f"Fcitx5: {FCITX_THEME} skin not enabled")))
 
 def _check_gtk_theme(env) -> None:
-    from nyxniri.gtktheme import gtktheme_registered, gtktheme_rendered
+    from nyxniri.modules.gtktheme import gtktheme_registered, gtktheme_rendered
     if gtktheme_rendered():
-        print(msg("doctor_ok", _text("GTK 主题: 已渲染并跟随壁纸", "GTK theme: rendered, following wallpaper")))
+        print(msg("doctor_ok", text("GTK 主题: 已渲染并跟随壁纸", "GTK theme: rendered, following wallpaper")))
     elif gtktheme_registered():
-        print(msg("doctor_warn", _text(
+        print(msg("doctor_warn", text(
             "GTK 主题: 模板已注册但未渲染，运行 nyxniri gtk install",
             "GTK theme: registered but not rendered, run nyxniri gtk install",
         )))
     else:
-        print(msg("doctor_warn", _text("GTK 主题: 未注册", "GTK theme: not registered")))
+        print(msg("doctor_warn", text("GTK 主题: 未注册", "GTK theme: not registered")))
 
 def _check_vm(env) -> None:
     if shutil.which("lspci"):
         try:
             res = subprocess.run(["lspci"], capture_output=True, text=True, check=False, env={**os.environ, "LC_ALL": "C"})
             if re.search(r"VMware|VirtualBox|QEMU|Virtio", res.stdout, re.IGNORECASE):
-                print(msg("doctor_warn", _text("检测到虚拟机。请确保 VM 设置中已启用 3D 图形加速", "Virtual Machine detected. Ensure 3D Graphics Acceleration is enabled in VM settings")))
+                print(msg("doctor_warn", text("检测到虚拟机。请确保 VM 设置中已启用 3D 图形加速", "Virtual Machine detected. Ensure 3D Graphics Acceleration is enabled in VM settings")))
         except Exception:
             pass
 
 def _check_greeter(env) -> None:
-    from nyxniri.greeter import greeter_status
+    from nyxniri.modules.greeter import greeter_status
     greeter_status()
+
+
+def _check_path_occlusion(env) -> None:
+    """System mode only: warn if a user-territory link shadows the package."""
+    from nyxniri.core import check_path_occlusion
+    if env.run_mode == "system":
+        check_path_occlusion()
+
+
+def _check_preset_drift(env) -> None:
+    """Warn if an app's active preset is no longer in repo or user presets.
+
+    Lets users catch 'your kitty transparent preset was removed upstream' even
+    without running update — the dest is frozen, but doctor surfaces it. §11
+    """
+    from nyxniri.deploy import discover_config_items
+    from nyxniri.deploy import read_active_preset
+    for app in discover_config_items():
+        active = read_active_preset(app)
+        if active == "default":
+            continue
+        official = env.configs_src / app / "presets" / active
+        user = env.presets_dir / app / active
+        if not official.is_dir() and not user.is_dir():
+            print(msg("doctor_warn", text(
+                f"{app}: 活动预设 '{active}' 已不在仓库（~/.config/{app} 已冻结，未重新部署）",
+                f"{app}: active preset '{active}' is gone from the repo (~/.config/{app} frozen, not redeployed)",
+            )))
 
 
 # Ordered registry of all health checks.
@@ -267,6 +291,8 @@ DOCTOR_CHECKS = [
     _check_gtk_theme,
     _check_vm,
     _check_greeter,
+    _check_path_occlusion,
+    _check_preset_drift,
 ]
 
 def run_doctor() -> bool:
@@ -364,7 +390,7 @@ def generate_bug_report() -> Optional[Path]:
     except Exception:
         pass
     if shutil.which("fcitx5") or (env.config_dir / "fcitx5" / "conf" / "classicui.conf").is_file():
-        from nyxniri.fcitx import fcitx_enabled
+        from nyxniri.modules.fcitx import fcitx_enabled
         health_lines.append(f"fcitx5 nyxmellow: {'enabled' if fcitx_enabled() else 'NOT enabled'}")
     health_checks = "\n".join(health_lines)
 

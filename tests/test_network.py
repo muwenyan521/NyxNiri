@@ -197,5 +197,60 @@ class TestGitProgressInsertion(unittest.TestCase):
         self.assertNotIn("--progress", cmd)
 
 
+class TestSafeGitPullCommandShape(unittest.TestCase):
+    """safe_git_pull 构造的 pull 命令必须含完整网络超时 flag（§9 参数形状契约）。
+
+    mock 打在 subprocess.run 层（紧贴被测代码），让命令流经 _with_git_progress
+    构造逻辑，而非在 _run_git_transfer 层截断绕过构造（见 AGENTS.md §9 反例）。
+    """
+
+    def setUp(self):
+        self._ctx = TempEnv()
+        self._ctx.__enter__()
+        self.home = self._ctx.home
+
+    def tearDown(self):
+        self._ctx.__exit__()
+
+    def test_pull_command_has_network_timeouts(self):
+        from nyxniri.network import safe_git_pull
+        from nyxniri.core import get_env
+
+        fake_repo = self.home / "fake-repo"
+        fake_repo.mkdir()
+        (fake_repo / ".git").mkdir()
+        get_env().run_mode = "standalone"
+        get_env().repo_dir = fake_repo
+
+        captured = {}
+
+        def fake_run(cmd, **kw):
+            m = MagicMock()
+            if "status" in cmd and "--porcelain" in cmd:
+                m.stdout = ""  # clean tree
+                m.returncode = 0
+            elif "pull" in cmd:
+                captured["cmd"] = cmd
+                m.stdout = "Already up to date."
+                m.returncode = 0
+            else:
+                m.stdout = ""
+                m.returncode = 0
+            return m
+
+        with patch("shutil.which", return_value="/usr/bin/git"), \
+             patch("subprocess.run", side_effect=fake_run), \
+             redirect_stdout(io.StringIO()):
+            result = safe_git_pull(fake_repo)
+
+        self.assertTrue(result)
+        cmd = captured["cmd"]
+        for flag in ("http.connectTimeout=10", "http.timeout=20",
+                     "http.lowSpeedLimit=1000", "http.lowSpeedTime=15"):
+            self.assertIn(flag, cmd)
+        self.assertIn("pull", cmd)
+        self.assertIn("--ff-only", cmd)
+
+
 if __name__ == "__main__":
     unittest.main()

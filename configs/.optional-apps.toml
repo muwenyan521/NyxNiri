@@ -1,0 +1,47 @@
+# Optional installable apps — no NyxNiri config shipped, just package metadata
+# for the deps menu + AUR optdepends. Single source of truth (§3.1 spirit:
+# data-driven, no hardcoded dict). Independent of config dirs (§2 the two-axis
+# design): an app here stays "optional" even if a configs/<app>/ dir is later
+# added — then it's optional AND has config, both true at once.
+#
+# Field defaults mirror .module.toml: repo defaults to [name], aur/label/detect
+# default to [] / name / name. Add an [[app]] block per optional app.
+
+[[app]]
+name = "nautilus"
+repo = ["nautilus"]
+
+[[app]]
+name = "missioncenter"
+repo = ["mission-center"]
+detect = "mission-center"
+
+[[app]]
+name = "fcitx5-rime"
+repo = ["fcitx5", "fcitx5-gtk", "fcitx5-qt", "fcitx5-configtool", "fcitx5-rime"]
+aur = ["rime-ice-git"]
+
+[[app]]
+name = "yazi"
+
+[[app]]
+name = "btop"
+
+[[app]]
+name = "duf"
+
+[[app]]
+name = "bat"
+
+[[app]]
+name = "procs"
+
+[[app]]
+name = "dust"
+
+[[app]]
+name = "git-delta"
+detect = "delta"
+
+[[app]]
+name = "vivid"

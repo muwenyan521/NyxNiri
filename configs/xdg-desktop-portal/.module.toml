@@ -1,0 +1,4 @@
+# xdg-desktop-portal manifest
+# package = binary = dir name; only the menu label is overridden.
+[packages]
+label = "XDG Portals"

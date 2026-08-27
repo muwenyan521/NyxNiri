@@ -7,13 +7,24 @@
 
 ## [Unreleased]
 
+## [v3.0.3] - 2026-08-26
+
+### Added
+- 配置预设：支持多套风味变体的应用（如 kitty 透明）可一键切换，切换不影响你的自定义修改；也能把当前配置存成私有预设，或直接在编辑器里改。
+- 卸载改为勾选清单：可逐项选择清理哪些，默认勾选等同原标准卸载范围；管道模式下默认全选并归档配置。
+- fisher 现可作为模块单独查询状态或卸载（nyxniri fisher ...），归类与 fcitx/greeter/gtk 一致。
+
 ### Changed
-- 壁纸选择器会按窗口大小排版，并在没有匹配壁纸时显示明确状态。
-- Orbit 与壁纸选择器共用调色板、动画和实例锁，快速重复触发更稳定。
-- 搜索框支持行首、行尾、清空、整词删除和整页翻页。
-- 终端新增 Yazi、btop、磁盘分析和 Git 差异入口，并提供缺失工具回退。
-- Orbit 新增工作区工具菜单，Fastfetch、Starship、Yazi、mpv 和 Nvim 可使用 Nyx 配色。
-- 迁移 Shorin Niri 的终端、Vim 导航、媒体和截图键位，并加入 Shorin-contrib 命令组件。
+- 引导脚本的报错与配色跟随系统语言并统一为主程序色阶。
+- 控制面板重新分组（部署 / 管理 / 诊断 / 扩展），「可选模块」改为「扩展」并补齐 GTK 主题与 fisher 的菜单入口；深度清理并入卸载流程。
+- 统一全项目文案：壁纸包、登录界面等一物一名；过程行统一用「安装」；英文菜单去除冗余括号与工程名。
+
+### Fixed
+- 检查更新与安装时的网络命令增加连接与整体超时，弱网或镜像无响应时不再卡死。
+- GTK4 应用（Nautilus、GTK Demo 等）标题栏的最小化、最大化、关闭按钮不再显示成同心圆。
+- 卸载时不再残留 fisher 与其插件、Noctalia Greeter 的系统状态目录、历史归档目录、以及被改过的 fcitx 快捷短语设置。
+- 标准卸载现在也会清理 Noctalia Greeter（之前只在深度清理时清理）。
+- 修复交互菜单里按住或自动重复的回车会残留并级联到下一个提示的问题（卸载确认后自动滚屏、甚至误触发安装）；确认提示改为单键响应，不再需要按回车。
 
 ## [v3.0.2] - 2026-08-24
 
@@ -48,7 +59,6 @@
 - 护眼模式快捷切换留下的失效链接现在能自动修复。
 - Fish 的 Tab 补全恢复，不再只采纳历史建议而无法补全文件路径。
 
-### Changed
 ## [v3.0.0] - 2026-08-22
 
 ### Added
@@ -375,7 +385,11 @@
 ### Added
 - 首次发布基于 Niri 与 Noctalia V5 的 NyxNiri 桌面配置。
 
-[Unreleased]: https://github.com/ech678/NyxNiri/compare/v2.3.4...HEAD
+[Unreleased]: https://github.com/ech678/NyxNiri/compare/v3.0.3...HEAD
+[v3.0.3]: https://github.com/ech678/NyxNiri/compare/v3.0.2...v3.0.3
+[v3.0.2]: https://github.com/ech678/NyxNiri/compare/v3.0.1...v3.0.2
+[v3.0.1]: https://github.com/ech678/NyxNiri/compare/v3.0.0...v3.0.1
+[v3.0.0]: https://github.com/ech678/NyxNiri/compare/v2.3.4...v3.0.0
 [v2.3.4]: https://github.com/ech678/NyxNiri/compare/v2.3.3...v2.3.4
 [v2.3.3]: https://github.com/ech678/NyxNiri/compare/v2.3.2...v2.3.3
 [v2.3.2]: https://github.com/ech678/NyxNiri/compare/v2.3.1...v2.3.2

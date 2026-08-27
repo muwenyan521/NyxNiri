@@ -205,7 +205,153 @@ Noctalia 模板引擎支持 `.dark.` / `.light.` 两种模式取色
 
 ---
 
-## 6. 问题与解决全记录 (Problem Log)
+## 6. GTK Material You 模板移植 (Porting Notes)
+
+`templates/gtk-{3,4}.0.css` 移植自 [HyprYou](https://github.com/hyprland-material-you)
+的 `gtk3.scss` / `gtk4.scss`。不引入 dart-sass 依赖，直接把 SCSS 展平为纯 CSS +
+Noctalia Jinja2 模板，Noctalia 在壁纸/明暗切换时自动渲染到
+`~/.config/gtk-{3,4}.0/gtk.css`。
+
+### 6.1 SCSS → Noctalia 模板转换规则
+
+| SCSS 写法 | Noctalia 模板写法 | 说明 |
+|---|---|---|
+| `$primary` | `{{ colors.primary.default.hex }}` | 变量 → M3 token |
+| `#{"" + $onSurface}` | `{{ colors.on_surface.default.hex }}` | 同上 |
+| `color.mix($X, transparent, 38%)` | `rgba({{ colors.x.default.rgb_csv }}, 0.38)` | 与透明色混合 = 设 alpha，用 `rgb_csv` 输出 `r, g, b`，手写 `rgba()` |
+| `color.mix(transparent, $X, 92%)` | `rgba({{ colors.x.default.rgb_csv }}, 0.08)` | 反向，alpha = 1 − N% |
+| `color.mix($A, $B, 90%)` 两色混合 | CSS `color-mix(in srgb, A 90%, B)` 双行 fallback | 见 §6.3 |
+| `&:hover { ... }` | `selector:hover { ... }` | 嵌套展平 |
+| `@use` / `@at-root` / `// <post:...>` | 删除 | SCSS 专用指令 |
+
+### 6.2 为什么零过滤器
+
+Noctalia 文档只展示了 `blend` / `set_alpha` 接受**字面量**参数的用法，没有变量
+参数。nyxmellow 模板（项目唯一已验证的 user template）**不用任何过滤器**，只用
+`{{ colors.X.default.hex }}`。GTK 模板对标 nyxmellow 做到零过滤器：
+
+- `set_alpha N` → `rgba({{ colors.X.default.rgb_csv }}, N)`（`rgb_csv` 是格式访问器，
+  不是过滤器）
+- `blend: colors.Y, N` → CSS `color-mix(in srgb, ...)` 双行 fallback
+
+### 6.3 color-mix 双行 fallback
+
+SCSS `color.mix($A, $B, N%)` = N% × A + (100−N)% × B，等价于 CSS
+`color-mix(in srgb, A N%, B)`。GTK4 4.10+ 原生支持 `color-mix()`，GTK3 不支持，
+用 CSS cascade 兜底：
+
+```css
+switch:hover {
+    /* GTK3 fallback (flat token) */
+    background-color: {{ colors.surface_container_highest.default.hex }};
+    /* GTK4 (color-mix，cascade 覆盖上行) */
+    background-color: color-mix(in srgb, {{ colors.surface_container_highest.default.hex }} 92%, {{ colors.on_surface.default.hex }});
+}
+```
+
+GTK3 跳过第二行用 flat 色，GTK4 用第二行覆盖。`@define-color` 中的 `color-mix`
+同理（GTK4 4.10+ 支持）；GTK3 `@define-color` 不支持，用近似 flat token。
+
+### 6.4 @define-color 分层
+
+文件里的 `@define-color` 块分三层，按顺序：
+
+1. **GTK3 legacy → M3**（`theme_bg_color`、`theme_fg_color`…）：旧 GTK3 应用读
+   这些名字，映射到 M3 token，换壁纸就跟着变。
+2. **语义色**（`STRAWBERRY`、`BANANA`…）：硬编码，不跟壁纸。Nemo 等文件管理器
+   用它们给文件类型标色。
+3. **libadwaita → M3**（`accent_bg_color`、`window_bg_color`…）：libadwaita /
+   adw-gtk3 读这些，映射到 M3 token。
+
+### 6.5 决策记录
+
+**保留**：
+- 水果色（STRAWBERRY/BANANA/BLUEBERRY…）——语义色，不应跟壁纸变。
+- `@define-color` 的 M3 映射块（`accent_bg_color → primary` 等）——libadwaita /
+  adw-gtk3 接入 M3 的核心。
+- GTK3 legacy named colors（`theme_bg_color` 等）——让不走 libadwaita 的旧 GTK3
+  应用也跟随壁纸。
+
+**删除**：
+- `window.hypryou-dialog`（gtk4.scss:555-591）——HyprYou 专有弹窗 widget。
+- Budgie named colors（`budgie_tasklist_indicator_color` 等）——NyxNiri 不用 Budgie。
+
+**修正**：
+- `through` → `trough`——原 SCSS progressbar 块里是拼写错误，GTK 的槽叫 `trough`。
+
+### 6.6 部署与渲染流程
+
+```
+configs/noctalia/templates/gtk-3.0.css / gtk-4.0.css  (模板源)
+  ↓ nyxniri deploy（atomic_replace_item，随 noctalia 目录部署）
+~/.config/noctalia/templates/gtk-3.0.css / gtk-4.0.css
+~/.config/noctalia/noctalia-config.toml  (/home/user → $HOME 替换)
+  ↓ Noctalia 壁纸/明暗切换时自动渲染
+~/.config/gtk-3.0/gtk.css
+~/.config/gtk-4.0/gtk.css
+```
+
+`noctalia-config.toml` 注册（`/home/user` 占位符由部署引擎替换为 `$HOME`）：
+
+```toml
+[theme.templates.user.nyxniri_gtk3]
+index = 3
+input_path = "/home/user/.config/noctalia/templates/gtk-3.0.css"
+output_path = "/home/user/.config/gtk-3.0/gtk.css"
+
+[theme.templates.user.nyxniri_gtk4]
+index = 4
+input_path = "/home/user/.config/noctalia/templates/gtk-4.0.css"
+output_path = "/home/user/.config/gtk-4.0/gtk.css"
+```
+
+模板部署后由 `nyxniri/gtktheme.py` 的 `gtktheme_trigger_render()` 调用
+`noctalia msg config-reload && noctalia msg templates-apply` 触发渲染；安装时
+`deploy.py:_phase_post_install_services()` 自动调用，手动触发用 `nyxniri gtk install`。
+
+### 6.7 theme-sync.sh 关系
+
+`theme-sync.sh`（深浅切换时运行，见 §3 信号流）做两件与 GTK 相关的事：
+
+1. **gsettings / INI**：设 `gtk-theme = adw-gtk3(-dark)` 与 `color-scheme`。
+   adw-gtk3 提供布局，`gtk.css` 覆盖颜色——结构基底，不需要改。
+2. **清理 legacy CSS**：删除含 `libadwaita.css` / `noctalia.css` / `iNiR theming`
+   标记的 `gtk.css`。本目录模板生成的 CSS 不含这些标记，不会被误删（已确认）。
+
+壁纸切换时 Noctalia 重新渲染 `gtk.css`，`theme-sync.sh` 不运行——不需要，
+颜色更新由 Noctalia 模板引擎完成。
+
+### 6.8 已知陷阱
+
+- **`foreground` token 不可用**：Noctalia 模板引擎不暴露 `foreground`，虽然 palette
+  JSON schema 有 `foreground` 字段，但 `{{ colors.foreground.default.hex }}` 会渲染
+  失败。`window_fg_color` 必须用 `on_background` 替代（语义相同，M3 规范里
+  `foreground` 就是 `onBackground` 的别名）。
+- **`gtk-dark.css` 软链接覆盖 M3 配色**：`~/.config/gtk-{3,4}.0/gtk-dark.css` 若是
+  指向 adw-gtk3 的软链接，内容是 `@import url('libadwaita.css')`，libadwaita.css
+  定义 110 个 `@define-color`（硬编码灰），在 `gtk.css` **之后**加载会覆盖 M3 定义。
+  必须删除该软链接，由 `theme-sync.sh` 清理逻辑与 `gtktheme.py:_clean_legacy_overrides()`
+  双重保障。
+
+### 6.9 Qt 自动跟随
+
+niri `config.kdl` 设了 `QT_QPA_PLATFORMTHEME="gtk3"`，Qt 应用读 GTK 主题。GTK 有
+M3 配色后，Qt 应用自动跟随，不需要 Kvantum（Kvantum 仅给走 Kvantum 引擎的 Qt 应用
+用，二者独立）。
+
+### 6.10 更新 HyprYou 上游
+
+若 HyprYou 的 `gtk3.scss` / `gtk4.scss` 有更新：
+
+1. diff 上游变更，判断是否需要同步。
+2. 按 §6.1 转换规则表手动转换 SCSS → CSS + Jinja2。
+3. `python3 -m unittest discover -s tests -q`。
+4. `HOME=$(mktemp -d) ./install.sh test` 确认部署正常。
+5. 实机换壁纸验证 GTK 应用跟随。
+
+---
+
+## 7. 问题与解决全记录 (Problem Log)
 
 ### Problem 1: `nyxniri theme toggle` 不广播 gsettings
 
@@ -339,10 +485,58 @@ Noctalia 模板引擎支持 `.dark.` / `.light.` 两种模式取色
   （延迟广播）实机证伪；方案 B（CDP）因 `brave://` 禁 CDP 导航不可行；
   两全方案（toggle 跳过 gsettings 广播让 Noctalia hook 异步独占）实测
   gsettings 值正确变化但 Brave 仍不响应
+- **方案 A 证伪的机制**：`gsettings set color-scheme` 重设**同值**时 dconf
+  去重，不写 dconf → 不发 changed 信号 → portal 无 `SettingChanged` 可重
+  广播。`dconf watch` 实测：单次 toggle 仅 1 次 color-scheme 写入（即时
+  那次），0.5s 后延迟重设**零写入**；连发两次同值 `gsettings set` 也是 0
+  次。延迟重广播对未变值是纯 no-op，Brave 收不到二次信号。
+- **延迟重广播的 flock 逃逸竞态**：`( sleep 0.5; gsettings set ... ) &` 是
+  分离子壳，不受 step 2 `flock` 约束。0.5s 内快速 toggle 到反模式时，旧
+  模式的延迟子壳撞上已变更的值，触发真实写入并回退用户选择。实测
+  （light→dark 连发）：`dconf watch` 捕获 4 次 `light, dark, light, dark`，
+  后 2 次是 spurious 回退，Nautilus 闪烁、Brave 被多余信号干扰。
+  PR #26 的延迟重广播 hunk 经此实测证伪，未合并。
+
+### Problem 12: GTK4 标题栏最小化/最大化/关闭按钮显示成同心圆
+
+- **症状**：Nautilus、GTK Demo 等 GTK4 应用标题栏右侧三个按钮显示成
+  同心圆（一个外圆套一个内圆）
+- **误判**：最初以为 `GtkWindowControls` 的按钮只带 `.minimize/.maximize/.close`、
+  没有 `.image-button`，根因是 libadwaita 通用 `button` 规则上底色 +
+  `button:not(.combo)` 掰成圆。按此修了 `windowcontrols button:not(.combo)`
+  重置（特异性 `(0,1,2)`），实机**无变化**。
+- **真根因**：`GtkButton` 在子部件是图标时**自动加 `.image-button`**
+  （`gtkbutton.c: update_style_classes_from_child_type`，文档明说"the node
+  will get .image-button if the content is just an image"）。`GtkWindowControls`
+  的 minimize/maximize/close 按钮塞了一个 `GtkImage`、不带 `.flat` →
+  自动获得 `.image-button`。GTK4 user CSS（`~/.config/gtk-4.0/gtk.css`，
+  provider 优先级 `USER=800`）压过 libadwaita（`THEME`）—— 这点"同心圆
+  能出现"本身就是证据：若 libadwaita 的
+  `windowcontrols > button:...image-button { background: none }` 生效，
+  按钮就透明、没外圆了。于是我们的 `.image-button` 规则给按钮
+  `secondary_container` 底色 + `100%` 圆角 = **外圆**；libadwaita 给
+  `windowcontrols > button > image` 加 `border-radius:100%` + 底色 = **内圆** →
+  同心圆。
+- **修复**：`gtk-4.0.css` 在 `@media` 块外加 `windowcontrols > button > image
+  { background: none; border-radius: 0 }`，只清掉 libadwaita 给图标加的**内圆**
+  （底色 + `border-radius:100%`），**保留**按钮本体的 `.image-button` 规则
+  （`secondary_container` 底色 + `100%` 圆角 = 大圆 + `:hover`/`:active` 混色）。
+  结果：窗口按钮变成标准的 M3 image-button（大圆 + 图标），与其它 image-button
+  一致；图标颜色由已有的 `.image-button image { color: on_secondary_container }`
+  给。user CSS（`USER=800`）压过 libadwaita（`THEME`），一条 base 规则即覆盖
+  libadwaita 的 `:hover`/`:active` 内圆（provider 优先级先于特异性）。
+- **代价**：失去 libadwaita 原生"图标内圈 hover/active 变深"反馈，改为大圆
+  整体变色（与其它 image-button 一致）；窗口按钮从低调变显眼（实色大圆）；
+  外观与 `.image-button` 规则耦合，将来改那条规则窗口按钮会跟着变。
+- **只改 GTK4**：GTK3/adw-gtk3 的 titlebutton 没有 libadwaita"图标圆"设计，
+  无此问题，`gtk-3.0.css` 不动
+- **坑**：GTK4 不热重载 CSS 文件（见 Problem 10），改完 gtk.css 必须重启
+  GTK4 应用才会生效
+- **状态**：已解决
 
 ---
 
-## 7. 旧文档的错误假设纠正
+## 8. 旧文档的错误假设纠正
 
 原 `notes/主题问题.md` 和 `主题问题总结.md` 的多个结论经实机验证是错误的：
 
@@ -359,7 +553,7 @@ Noctalia 模板引擎支持 `.dark.` / `.light.` 两种模式取色
 
 ---
 
-## 8. 排障速查 (Troubleshooting)
+## 9. 排障速查 (Troubleshooting)
 
 | 症状 | 检查点 |
 |---|---|
@@ -372,10 +566,11 @@ Noctalia 模板引擎支持 `.dark.` / `.light.` 两种模式取色
 | gtk.css 渲染错色 | Noctalia 调色板是否已更新？（等 ~6s）`noctalia msg config-reload && noctalia msg templates-apply` |
 | Brave 报 Theme parsing error | `gtk-3.0.css` 是否含 GTK4 专有属性？ |
 | M3 颜色覆盖不了 | `gtk-dark.css` 软链接是否已删？`ls -la ~/.config/gtk-4.0/gtk-dark.css` |
+| GTK4 标题栏按钮显示成同心圆 | `gtk-4.0/gtk.css` 是否含 `windowcontrols button` 重置？`grep windowcontrols ~/.config/gtk-4.0/gtk.css` |
 
 ---
 
-## 9. 调试命令 (Debug Commands)
+## 10. 调试命令 (Debug Commands)
 
 ```bash
 # 手动触发 Noctalia 渲染
@@ -405,6 +600,10 @@ sm = Adw.StyleManager.get_default()
 print('dark:', sm.get_dark())
 "
 
+# 验证 toggle 是否真的触发 gsettings/portal 信号（dconf 同值去重检验）
+# 一终端 watch，另一终端 toggle；看 color-scheme 写入次数
+dconf watch /org/gnome/desktop/interface/
+
 # 手动切换
 nyxniri theme toggle
 nyxniri theme dark
@@ -413,7 +612,7 @@ nyxniri theme light
 
 ---
 
-## 10. 相关文件索引
+## 11. 相关文件索引
 
 | 文件 | 职责 |
 |---|---|
@@ -426,4 +625,5 @@ nyxniri theme light
 | `nyxniri/gtktheme.py` | `nyxniri gtk install\|status\|uninstall` |
 | `nyxniri/cli.py` | `nyxniri theme` 子命令 |
 | `nyxniri/deploy.py` | 部署 + 模板渲染触发 |
-| `notes/gtk-material-you-port.md` | SCSS→CSS 移植笔记 |
+
+> 历史移植/排查笔记原在 `notes/`（本地开发笔记，不入库），内容已并入本文 §6 与 §7。

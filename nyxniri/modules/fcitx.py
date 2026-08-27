@@ -9,11 +9,8 @@ from pathlib import Path
 
 from nyxniri.constants import Colors, FCITX_THEME, PROJECT_NAME, THEME_ENGINE
 from nyxniri.core import get_env, log_msg
-from nyxniri.i18n import get_lang, msg
+from nyxniri.i18n import msg, text
 
-
-def _text(zh: str, en: str) -> str:
-    return zh if get_lang() == "zh" else en
 
 def _fcitx_paths():
     env = get_env()
@@ -126,8 +123,43 @@ def fcitx_configure_quickphrase() -> None:
     """Configure QuickPhrase hotkey in quickphrase.conf."""
     env = get_env()
     qp_conf = env.config_dir / "fcitx5" / "conf" / "quickphrase.conf"
+    fcitx_backup_quickphrase()
     _update_ini_file(qp_conf, "Hotkey", "TriggerKey", "Super+semicolon")
     _update_ini_file(qp_conf, "Hotkey", "AlternativeTriggerKey", "")
+
+def fcitx_backup_quickphrase() -> None:
+    """Save prior QuickPhrase hotkeys before NyxNiri overrides them.
+
+    Mirrors fcitx_backup_theme_settings: an Existed= flag distinguishes
+    'file didn't exist' (uninstall deletes it) from 'existed with other hotkeys'
+    (uninstall restores the saved lines). Idempotent.
+    """
+    env = get_env()
+    qp_conf = env.config_dir / "fcitx5" / "conf" / "quickphrase.conf"
+    state = env.state_dir / f"fcitx-{FCITX_THEME}-quickphrase.prev"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    if state.is_file():
+        return
+
+    existed = 0
+    tk, atk = "", ""
+    if qp_conf.is_file():
+        existed = 1
+        try:
+            content = qp_conf.read_text(encoding="utf-8", errors="ignore")
+            m_tk = re.search(r"^TriggerKey=(.*)", content, re.MULTILINE)
+            if m_tk:
+                tk = m_tk.group(1).strip()
+            m_atk = re.search(r"^AlternativeTriggerKey=(.*)", content, re.MULTILINE)
+            if m_atk:
+                atk = m_atk.group(1).strip()
+        except Exception:
+            pass
+
+    state.write_text(
+        f"Existed={existed}\nTriggerKey={tk}\nAlternativeTriggerKey={atk}\n",
+        encoding="utf-8",
+    )
 
 def fcitx_restart() -> None:
     """Restart running fcitx5 daemon to load updated skin."""
@@ -229,9 +261,9 @@ def fcitx_status() -> None:
     print(msg("fcitx_status_title"))
 
     if fcitx5_installed():
-        print(msg("doctor_ok", _text("fcitx5: 已安装", "fcitx5: installed")))
+        print(msg("doctor_ok", text("fcitx5: 已安装", "fcitx5: installed")))
     else:
-        print(msg("doctor_warn", _text("fcitx5: 未安装", "fcitx5: not installed")))
+        print(msg("doctor_warn", text("fcitx5: 未安装", "fcitx5: not installed")))
 
     if fcitx_templates_registered():
         print(msg("fcitx_registered", str(noctalia_conf)))
@@ -239,16 +271,16 @@ def fcitx_status() -> None:
         print(msg("fcitx_not_registered", str(noctalia_conf)))
 
     if theme_dir.is_dir():
-        print(msg("doctor_ok", _text(f"主题目录: {theme_dir}", f"Theme directory: {theme_dir}")))
+        print(msg("doctor_ok", text(f"主题目录: {theme_dir}", f"Theme directory: {theme_dir}")))
         if (theme_dir / "theme.conf").is_file() and (theme_dir / "panel.svg").is_file() and (theme_dir / "highlight.svg").is_file():
-            print(msg("doctor_ok", _text("渲染文件: 已生成并跟随 Noctalia 配色", "Rendered files: present and following Noctalia colors")))
+            print(msg("doctor_ok", text("渲染文件: 已生成并跟随 Noctalia 配色", "Rendered files: present and following Noctalia colors")))
         else:
-            print(msg("doctor_warn", _text(
+            print(msg("doctor_warn", text(
                 f"渲染文件缺失；请运行 {THEME_ENGINE} msg config-reload 或 nyxniri fcitx install",
                 f"Rendered files are missing; run {THEME_ENGINE} msg config-reload or nyxniri fcitx install",
             )))
     else:
-        print(msg("doctor_warn", _text(f"主题目录缺失: {theme_dir}", f"Theme directory is missing: {theme_dir}")))
+        print(msg("doctor_warn", text(f"主题目录缺失: {theme_dir}", f"Theme directory is missing: {theme_dir}")))
 
     if classicui.is_file():
         try:
@@ -261,7 +293,7 @@ def fcitx_status() -> None:
         except Exception:
             pass
     else:
-        print(msg("doctor_warn", _text("classicui.conf: 缺失", "classicui.conf: missing")))
+        print(msg("doctor_warn", text("classicui.conf: 缺失", "classicui.conf: missing")))
 
 def fcitx_uninstall() -> bool:
     """Uninstall NyxMellow skin, unregister templates, and revert classicui settings."""
@@ -314,6 +346,36 @@ def fcitx_uninstall() -> bool:
         except Exception:
             pass
         state_file.unlink(missing_ok=True)
+
+    # Revert quickphrase.conf (same backup/restore mechanism as classicui)
+    env = get_env()
+    qp_conf = env.config_dir / "fcitx5" / "conf" / "quickphrase.conf"
+    qp_state = env.state_dir / f"fcitx-{FCITX_THEME}-quickphrase.prev"
+    if qp_state.is_file():
+        try:
+            qs = qp_state.read_text(encoding="utf-8")
+            m_ex = re.search(r"^Existed=(.*)", qs, re.MULTILINE)
+            m_tk = re.search(r"^TriggerKey=(.*)", qs, re.MULTILINE)
+            m_atk = re.search(r"^AlternativeTriggerKey=(.*)", qs, re.MULTILINE)
+            existed = m_ex.group(1).strip() if m_ex else "0"
+            tk = m_tk.group(1).strip() if m_tk else ""
+            atk = m_atk.group(1).strip() if m_atk else ""
+            if existed != "1":
+                qp_conf.unlink(missing_ok=True)
+            elif qp_conf.is_file():
+                content = qp_conf.read_text(encoding="utf-8")
+                if tk:
+                    content = re.sub(r"^TriggerKey=.*", f"TriggerKey={tk}", content, flags=re.MULTILINE)
+                else:
+                    content = re.sub(r"^TriggerKey=.*\n?", "", content, flags=re.MULTILINE)
+                if atk:
+                    content = re.sub(r"^AlternativeTriggerKey=.*", f"AlternativeTriggerKey={atk}", content, flags=re.MULTILINE)
+                else:
+                    content = re.sub(r"^AlternativeTriggerKey=.*\n?", "", content, flags=re.MULTILINE)
+                qp_conf.write_text(content, encoding="utf-8")
+        except Exception:
+            pass
+        qp_state.unlink(missing_ok=True)
 
     enabled_marker.unlink(missing_ok=True)
     fcitx_restart()

@@ -1,7 +1,6 @@
 """Configuration snapshot, backup, rollback, and uninstallation management."""
 
 import datetime
-import os
 import re
 import shutil
 import sys
@@ -9,46 +8,20 @@ import tempfile
 from pathlib import Path
 from typing import List, Optional
 
-from nyxniri.constants import CLI_CMD, Colors, PROJECT_NAME
+from nyxniri.constants import Colors, PROJECT_NAME
 from nyxniri.core import (
+    copy_path,
     get_env,
-    get_pics_dir,
     log_msg,
     register_temp_path,
 )
 from nyxniri.i18n import msg
-from nyxniri.tui import CheckboxEntry, CheckboxList, prompt_confirm, truncate_display
+from nyxniri.tui import CheckboxEntry, CheckboxList, drain_stdin, prompt_confirm, truncate_display
 
 
 _MANAGED_SNAPSHOT_RE = re.compile(
     r"^(?:(?:snapshot|pre_rollback)_\d{8}_\d{6}(?:_\d+){0,2}|dotfiles_backup_.+)$"
 )
-
-
-def _copy_path(src: Path, dest: Path) -> None:
-    """Copy one path while preserving a top-level symlink as a symlink."""
-    if src.is_symlink():
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.unlink(missing_ok=True)
-        dest.symlink_to(os.readlink(src))
-    elif src.is_dir():
-        shutil.copytree(src, dest, symlinks=True)
-    else:
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dest)
-
-
-def _remove_path(path: Path) -> None:
-    """Remove a path without following a top-level symlink."""
-    try:
-        if path.is_symlink():
-            path.unlink(missing_ok=True)
-        elif path.is_dir():
-            shutil.rmtree(path, ignore_errors=True)
-        else:
-            path.unlink(missing_ok=True)
-    except OSError:
-        pass
 
 
 def get_backup_base_dir() -> Path:
@@ -84,11 +57,11 @@ def backup_configs(note: str = "", interactive: bool = True) -> Optional[Path]:
             for source in managed_bin_sources():
                 current = cfg_path / source.name
                 if current.is_file() or current.is_symlink():
-                    _copy_path(current, target / source.name)
+                    copy_path(current, target / source.name)
             continue
         if cfg_path.exists() or cfg_path.is_symlink():
             target = tmp_dir / item
-            _copy_path(cfg_path, target)
+            copy_path(cfg_path, target)
             if interactive:
                 print(msg("log_backup_item", item))
 
@@ -200,6 +173,7 @@ def rollback_configs(target_arg: str = "") -> bool:
         try:
             sys.stdout.write(msg("select_rollback_target"))
             sys.stdout.flush()
+            drain_stdin()
             val = sys.stdin.readline().strip()
             if not val.isdigit() or not (1 <= int(val) <= len(backups)):
                 print(msg("rollback_invalid_num"))
@@ -301,136 +275,3 @@ def delete_backup(target_arg: str = "") -> bool:
     for backup in deleted:
         log_msg("INFO", f"Deleted snapshot {backup}")
     return len(deleted) == len(selected)
-
-def uninstall_nyxniri(mode: str = "") -> bool:
-    """Safely uninstall NyxNiri or deep purge configurations and cache."""
-    from nyxniri.deploy import config_destination, discover_config_items, managed_bin_sources
-    from nyxniri.fcitx import fcitx_uninstall
-    from nyxniri.greeter import greeter_uninstall
-    from nyxniri.gtktheme import gtktheme_uninstall
-
-    env = get_env()
-    items = discover_config_items()
-
-    # Legacy mode aliases → canonical names
-    if mode in ("1", "safe", "--safe"):
-        mode = "standard"
-    elif mode in ("2", "--restore"):
-        mode = "restore"
-    elif mode in ("3", "--purge"):
-        mode = "purge"
-
-    if not mode and not sys.stdin.isatty():
-        return False
-
-    if not mode and sys.stdin.isatty():
-        print(msg("uninstall_title"))
-        print(f"  {Colors.BOLD_GREEN}1){Colors.RESET} {msg('uninstall_opt1')}")
-        print(f"  {Colors.BOLD_CYAN}2){Colors.RESET} {msg('uninstall_opt2')}")
-        print(f"  {Colors.BOLD_RED}3){Colors.RESET} {msg('uninstall_opt3')}")
-        print(f"  {Colors.DARK_GRAY}4){Colors.RESET} {msg('uninstall_opt4')}\n")
-        try:
-            sys.stdout.write("▸ [1-4]: ")
-            sys.stdout.flush()
-            choice = sys.stdin.readline().strip()
-            if choice == "1": mode = "standard"
-            elif choice == "2": mode = "restore"
-            elif choice == "3": mode = "purge"
-            else:
-                print(msg("log_uninstall_cancelled"))
-                return False
-        except Exception:
-            return False
-
-    if mode == "purge":
-        print(msg("purge_warning"))
-        if not prompt_confirm("purge_prompt", "n"):
-            print(msg("purge_cancelled"))
-            return False
-        print(msg("purge_start"))
-        try:
-            fcitx_uninstall()
-        except Exception as e:
-            log_msg("WARN", f"fcitx uninstall failed during purge: {e}")
-        try:
-            gtktheme_uninstall()
-        except Exception as e:
-            log_msg("WARN", f"gtk theme uninstall failed during purge: {e}")
-        try:
-            greeter_uninstall()
-        except Exception as e:
-            log_msg("WARN", f"greeter uninstall failed during purge: {e}")
-
-        for item in items:
-            p = config_destination(item)
-            if item == "bin":
-                for source in managed_bin_sources():
-                    (p / source.name).unlink(missing_ok=True)
-                continue
-            if p.exists() or p.is_symlink():
-                _remove_path(p)
-                print(msg("log_remove_item", item))
-
-        for backup in get_all_backups():
-            _remove_path(backup)
-
-        _remove_path(env.config_dir / PROJECT_NAME)
-        _remove_path(env.state_dir)
-        _remove_path(env.cache_dir)
-
-        pics_wp = get_pics_dir() / "Wallpapers"
-        _remove_path(pics_wp)
-
-        target_bin = env.home / ".local/bin" / CLI_CMD
-        target_bin.unlink(missing_ok=True)
-        print(msg("purge_done"))
-        return True
-
-    if mode == "restore":
-        backups = get_all_backups()
-        if not backups:
-            print(msg("no_backups_found"))
-            return False
-        origin = backups[0]
-        print(msg("log_restoring_origin_config", origin.name))
-        rollback_configs(str(origin))
-        print(msg("restore_origin_done"))
-        return True
-
-    # Standard uninstall: Archive current dotfiles, remove configs & CLI
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    archive_dir = env.config_dir / f"{PROJECT_NAME}_archive_{timestamp}"
-    archive_dir.mkdir(parents=True, exist_ok=True)
-
-    for item in items:
-        p = config_destination(item)
-        if item == "bin":
-            for source in managed_bin_sources():
-                current = p / source.name
-                if current.is_file() or current.is_symlink():
-                    _copy_path(current, archive_dir / item / source.name)
-                    _remove_path(current)
-            continue
-        if p.exists() or p.is_symlink():
-            target = archive_dir / item
-            _copy_path(p, target)
-            _remove_path(p)
-            print(msg("log_remove_item", item))
-
-    target_bin = env.home / ".local/bin" / CLI_CMD
-    target_bin.unlink(missing_ok=True)
-
-    try:
-        fcitx_uninstall()
-    except Exception as e:
-        log_msg("WARN", f"fcitx uninstall failed: {e}")
-
-    try:
-        gtktheme_uninstall()
-    except Exception as e:
-        log_msg("WARN", f"gtk theme uninstall failed: {e}")
-
-    print(msg("uninstall_archived", str(archive_dir)))
-    print(msg("uninstall_done"))
-    log_msg("INFO", f"Uninstalled NyxNiri (archived to {archive_dir})")
-    return True

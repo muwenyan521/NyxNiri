@@ -8,10 +8,12 @@ import shutil
 import signal
 import sys
 import termios
+import time
 import tty
 import unicodedata
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any, Callable, List, Optional, Tuple
 
 from nyxniri.constants import Colors
 from nyxniri.core import Environment, get_env
@@ -118,6 +120,7 @@ def responsive_hint(key: str) -> str:
         "dep_menu_hint": "checklist_hint_short",
         "opt_apps_menu_hint": "checklist_hint_short",
         "summary_action_hint": "summary_action_hint_short",
+        "preset_switcher_hint": "preset_switcher_hint_short",
     }
     return msg(short_keys.get(key, key))
 
@@ -182,6 +185,103 @@ def read_key() -> str:
             return ""
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_attr)
+
+# --- Loop-scoped raw input (kills the cooked-echo window between keys) ---
+def _swallow_repeat(fd: int, quiet: float = 0.05, cap: float = 2.0) -> None:
+    """Keep draining bytes until `quiet` seconds pass with no new input.
+
+    Absorbs an OS auto-repeat burst (held key) until the user releases, so the
+    repeated bytes don't feed the next read_key() and cascade. The quiet window
+    (~50ms) reliably exceeds a standard ~33ms auto-repeat interval, so silence
+    means release. Hard-capped so a runaway stream can't pin the loop.
+    """
+    end = time.time() + cap
+    while time.time() < end:
+        ready, _, _ = select.select([fd], [], [], quiet)
+        if not ready:
+            return  # quiet window elapsed → key released
+        try:
+            if os.read(fd, 64) == b"":
+                return
+        except OSError:
+            return
+
+
+def _drain_pending(fd: int, debounce: bool = False) -> None:
+    """Discard pending input; optionally debounce-swallow the auto-repeat tail.
+
+    Two modes:
+    - ``debounce=False`` (component *entry*): one non-blocking sweep of bytes
+      already queued from the previous component. No wait if empty → zero
+      latency on a clean transition.
+    - ``debounce=True`` (after an *action* key, e.g. the Enter that confirms):
+      sweep, then keep swallowing until a quiet window — the OS auto-repeat
+      stream arrives ~30ms *after* the legitimate key, so a snapshot sweep
+      runs in the gap and misses it; only a timed quiet-wait catches the tail.
+      Called in each loop's ``finally`` so every exit (the action that caused it)
+      drains its own repeat burst before the next component reads.
+
+    A held Enter otherwise cascades: repeat bytes feed the next read_key().
+    """
+    found = False
+    while True:
+        ready, _, _ = select.select([fd], [], [], 0)
+        if not ready:
+            break
+        try:
+            if os.read(fd, 64) == b"":
+                return
+        except OSError:
+            return
+        found = True
+    if debounce or found:
+        _swallow_repeat(fd)
+
+
+@contextmanager
+def raw_input_mode(fd: int):
+    """Hold stdin in echo-off raw mode for an interactive loop's duration.
+
+    read_key() toggles raw↔cooked per call; the cooked echo window between calls
+    echoed held/auto-repeated Enter as newlines and let the buffered bytes
+    cascade into the next prompt. Holding raw for the whole loop removes that
+    window. OPOST is re-enabled so the loop's ``\\n`` renders still become
+    ``\\r\\n`` (no staircase); ISIG stays off so Ctrl+C arrives as ``\\x03``
+    (handled as EXIT, same as the per-call read_key path).
+
+    No-op when stdin is not a real tty: tests patch isatty + read_key, the real
+    fd isn't a tty, tcgetattr raises and we skip — the loop then reads the patch.
+    """
+    old = None
+    try:
+        if sys.stdin.isatty():
+            old = termios.tcgetattr(fd)
+            tty.setraw(fd)
+            new = termios.tcgetattr(fd)
+            new[1] |= termios.OPOST  # keep \n -> \r\n translation on output
+            termios.tcsetattr(fd, termios.TCSANOW, new)
+    except Exception:
+        old = None
+    try:
+        yield
+    finally:
+        if old is not None:
+            try:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old)
+            except Exception:
+                pass
+
+
+def drain_stdin() -> None:
+    """Drain pending input for cooked-line callers (snapshot note / rollback index).
+
+    A brief raw pass that reliably discards leftover bytes (canonical mode's
+    select+read is unreliable for partial lines), then restores cooked for readline.
+    """
+    if not sys.stdin.isatty():
+        return
+    with raw_input_mode(sys.stdin.fileno()):
+        _drain_pending(sys.stdin.fileno())
 
 # --- Rendering Primitives & Screen Cleaners ---
 def clear_screen() -> None:
@@ -279,28 +379,41 @@ def render_check_row(is_focus: bool, check_str: str, label: str) -> None:
 def press_any_key() -> None:
     """Prompt to press any key to continue."""
     if sys.stdin.isatty():
+        fd = sys.stdin.fileno()
         sys.stdout.write(msg("press_any_key"))
         sys.stdout.flush()
-        read_key()
+        with raw_input_mode(fd):
+            _drain_pending(fd)
+            read_key()
+            _drain_pending(fd, debounce=True)
         sys.stdout.write("\n")
 
 def prompt_confirm(prompt_key: str, default: str = "y") -> bool:
-    """Bilingual prompt confirmation (returns True for Yes, False for No)."""
+    """Bilingual prompt confirmation (True for Yes, False for No).
+
+    Single-key raw read (y/n/Enter=default/Esc/Ctrl+C=No). Only the first char
+    ever mattered under the old readline path (``line.lower().startswith('y')``),
+    so raw single-key is equivalent — and it can't echo a stale buffered Enter.
+    """
     if os.environ.get("NYXNIRI_AUTO_YES", "0") == "1":
         return True
 
     sys.stdout.write(msg(prompt_key))
     sys.stdout.flush()
-    try:
-        line = sys.stdin.readline()
-        if not line:
-            return default.lower().startswith("y")
-        line = line.strip()
-        if not line:
-            return default.lower().startswith("y")
-        return line.lower().startswith("y")
-    except Exception:
+    if not sys.stdin.isatty():
         return default.lower().startswith("y")
+
+    fd = sys.stdin.fileno()
+    with raw_input_mode(fd):
+        _drain_pending(fd)
+        key = read_key()
+        _drain_pending(fd, debounce=True)
+    sys.stdout.write("\n")
+    if key in ("y", "Y"):
+        return True
+    if key == "ENTER":
+        return default.lower().startswith("y")
+    return False  # n/N/Esc/Ctrl+C/any other → No (safe cancel)
 
 # --- Component: Interactive Menu ---
 @dataclass
@@ -328,7 +441,11 @@ class Menu:
         env = get_env()
 
         sys.stdout.write(Colors.CURSOR_HIDE)
+        fd = sys.stdin.fileno()
+        stack = ExitStack()
+        stack.enter_context(raw_input_mode(fd))
         try:
+            _drain_pending(fd)
             while True:
                 sys.stdout.write("\033[?25l\033[H")
                 show_logo(env)
@@ -372,6 +489,8 @@ class Menu:
                 elif key in ("ESC", "EXIT"):
                     return max_idx
         finally:
+            _drain_pending(fd, debounce=True)
+            stack.close()
             sys.stdout.write(Colors.CURSOR_SHOW)
             sys.stdout.flush()
 
@@ -405,7 +524,11 @@ class CheckboxList:
 
         env = get_env()
         sys.stdout.write(Colors.CURSOR_HIDE)
+        fd = sys.stdin.fileno()
+        stack = ExitStack()
+        stack.enter_context(raw_input_mode(fd))
         try:
+            _drain_pending(fd)
             while True:
                 sys.stdout.write("\033[?25l\033[H")
                 show_logo(env)
@@ -468,6 +591,162 @@ class CheckboxList:
                 elif key == "ENTER":
                     return [e.key for e in self.entries if not e.is_separator and e.checked]
         finally:
+            _drain_pending(fd, debounce=True)
+            stack.close()
+            sys.stdout.write(Colors.CURSOR_SHOW)
+            sys.stdout.flush()
+
+# --- Component: Dual-Pane Preset Switcher (§9) ---
+class PresetSwitcher:
+    """Two-column preset switcher: left = apps, right = presets of the focused app.
+
+    The ranger/mc model: one cursor that lives in one pane at a time. ←/→ move
+    the cursor between panes; ↑/↓ move within the active pane. Enter applies the
+    (focused app, focused preset) pair; q/ESC cancels. The active preset is
+    always marked ``>``; the focused app's preset list re-renders on switch,
+    landing its cursor on the active preset.
+
+    Decoupled from deploy/preset: the caller supplies the app list and a
+    callback returning ``[(preset_name, is_active)]`` for an app. ``run()``
+    returns the chosen ``(app, preset)`` pair, or None on cancel.
+    """
+
+    def __init__(
+        self,
+        apps: List[str],
+        presets_for: Callable[[str], List[Tuple[str, bool]]],
+        title_key: str = "preset_switcher_title",
+        hint_key: str = "preset_switcher_hint",
+    ):
+        self.apps = apps
+        self.presets_for = presets_for
+        self.title_key = title_key
+        self.hint_key = hint_key
+
+    def run(self) -> Optional[Tuple[str, str]]:
+        if not self.apps or not sys.stdin.isatty():
+            return None
+        env = get_env()
+        left = 0
+        pane = "left"
+        right_cache: dict = {}
+        right_idx = 0
+
+        def right_items(app: str) -> List[Tuple[str, bool]]:
+            if app not in right_cache:
+                right_cache[app] = list(self.presets_for(app))
+            return right_cache[app]
+
+        def land_on_active(app: str) -> int:
+            for i, (_, is_active) in enumerate(right_items(app)):
+                if is_active:
+                    return i
+            return 0
+
+        right_idx = land_on_active(self.apps[left])
+        sys.stdout.write(Colors.CURSOR_HIDE)
+        fd = sys.stdin.fileno()
+        stack = ExitStack()
+        stack.enter_context(raw_input_mode(fd))
+        try:
+            _drain_pending(fd)
+            while True:
+                sys.stdout.write("\033[?25l\033[H")
+                show_logo(env)
+                title = msg(self.title_key).strip("\n")
+                write_cleared(f"{title}\n\n")
+
+                app = self.apps[left]
+                presets = right_items(app)
+                size = shutil.get_terminal_size((80, 24))
+                cols, terminal_lines = size.columns, size.lines
+                left_w = min(24, max(8, cols // 3))
+                gap = 3
+                right_w = max(8, cols - left_w - gap - 4)
+
+                hdr_l = msg("preset_switcher_col_app")
+                hdr_r = msg("preset_switcher_col_preset", app)
+                write_cleared(
+                    f"  {Colors.BOLD_WHITE}{pad_display(hdr_l, left_w)}{Colors.RESET}"
+                    f"{' ' * gap}{Colors.BOLD_WHITE}{truncate_display(hdr_r, right_w)}{Colors.RESET}\n"
+                )
+                write_cleared(
+                    f"  {Colors.DARK_GRAY}{'─' * left_w}{Colors.RESET}"
+                    f"{' ' * gap}{Colors.DARK_GRAY}{'─' * min(right_w, 16)}{Colors.RESET}\n"
+                )
+
+                rows = max(len(self.apps), len(presets))
+                visible = max(4, terminal_lines - 16)
+                active_cursor = left if pane == "left" else right_idx
+                start = max(0, min(active_cursor - visible // 2, rows - visible))
+                end = min(rows, start + visible)
+                if start > 0:
+                    write_cleared(f"  {Colors.DARK_GRAY}...{Colors.RESET}\n")
+                for i in range(start, end):
+                    # left cell
+                    if i < len(self.apps):
+                        a = self.apps[i]
+                        is_left_focus = i == left
+                        if pane == "left" and is_left_focus:
+                            lpre = f"{Colors.BOLD_CYAN}❯ {Colors.RESET}"
+                            lcol = Colors.BOLD_WHITE
+                        elif is_left_focus:
+                            lpre = f"{Colors.DARK_GRAY}❯ {Colors.RESET}"
+                            lcol = Colors.DARK_GRAY
+                        else:
+                            lpre = "  "
+                            lcol = ""
+                        lcell = f"{lpre}{lcol}{truncate_display(a, left_w - 2)}{Colors.RESET}"
+                    else:
+                        lcell = ""
+                    # right cell
+                    if i < len(presets):
+                        pname, is_active = presets[i]
+                        marker = f"{Colors.BOLD_GREEN}>{Colors.RESET}" if is_active else " "
+                        if pane == "right" and i == right_idx:
+                            rpre = f"{Colors.BOLD_CYAN}❯ {Colors.RESET}"
+                            rcol = Colors.BOLD_WHITE
+                        else:
+                            rpre = "  "
+                            rcol = ""
+                        rcell = f"{rpre}{marker} {rcol}{truncate_display(pname, right_w - 4)}{Colors.RESET}"
+                    else:
+                        rcell = ""
+                    write_cleared(f"  {pad_display(lcell, left_w + 2)}{' ' * gap}{rcell}\033[K\n")
+                if end < rows:
+                    write_cleared(f"  {Colors.DARK_GRAY}...{Colors.RESET}\n")
+
+                hint = responsive_hint(self.hint_key).strip("\n")
+                write_cleared(f"\n{hint}\n")
+                sys.stdout.write("\033[J")
+                sys.stdout.flush()
+
+                key = read_key()
+                if key in ("LEFT", "h", "H"):
+                    pane = "left"
+                elif key in ("RIGHT", "l", "L"):
+                    if presets:
+                        pane = "right"
+                elif key in ("UP", "k", "K"):
+                    if pane == "left":
+                        left = (left - 1) % len(self.apps)
+                        right_idx = land_on_active(self.apps[left])
+                    elif presets:
+                        right_idx = (right_idx - 1) % len(presets)
+                elif key in ("DOWN", "j", "J"):
+                    if pane == "left":
+                        left = (left + 1) % len(self.apps)
+                        right_idx = land_on_active(self.apps[left])
+                    elif presets:
+                        right_idx = (right_idx + 1) % len(presets)
+                elif key in ("ENTER", "SPACE"):
+                    if presets:
+                        return (self.apps[left], presets[right_idx][0])
+                elif key in ("0", "q", "Q", "ESC", "EXIT"):
+                    return None
+        finally:
+            _drain_pending(fd, debounce=True)
+            stack.close()
             sys.stdout.write(Colors.CURSOR_SHOW)
             sys.stdout.flush()
 
@@ -484,7 +763,11 @@ def select_language() -> str:
     focus = 1  # Default to Simplified Chinese
 
     sys.stdout.write(Colors.CURSOR_HIDE)
+    fd = sys.stdin.fileno()
+    stack = ExitStack()
+    stack.enter_context(raw_input_mode(fd))
     try:
+        _drain_pending(fd)
         while True:
             sys.stdout.write("\033[?25l\033[H")
             show_logo(env)
@@ -515,5 +798,7 @@ def select_language() -> str:
             elif key in ("ESC", "EXIT"):
                 sys.exit(130)
     finally:
+        _drain_pending(fd, debounce=True)
+        stack.close()
         sys.stdout.write(Colors.CURSOR_SHOW)
         sys.stdout.flush()

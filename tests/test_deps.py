@@ -56,7 +56,7 @@ class TestOptionalAppPackageMapping(unittest.TestCase):
             with patch("nyxniri.deps.get_preferred_pkg_manager", return_value=["paru"]):
                 with patch("nyxniri.deps.aur_helper_usable", return_value="paru"):
                     with patch("shutil.which", return_value="/usr/bin/fcitx5"):
-                        with patch("nyxniri.fcitx.fcitx_install", return_value=True):
+                        with patch("nyxniri.modules.fcitx.fcitx_install", return_value=True):
                             with patch("builtins.print"):
                                 install_optional_apps(["fcitx5-rime"])
 
@@ -77,7 +77,7 @@ class TestOptionalAppPackageMapping(unittest.TestCase):
             with patch("nyxniri.deps.get_preferred_pkg_manager", return_value=["paru"]):
                 with patch("nyxniri.deps.aur_helper_usable", return_value="paru"):
                     with patch("shutil.which", return_value="/usr/bin/fcitx5"):
-                        with patch("nyxniri.fcitx.fcitx_install") as mock_fcitx:
+                        with patch("nyxniri.modules.fcitx.fcitx_install") as mock_fcitx:
                             with patch("builtins.print"):
                                 install_optional_apps(["fcitx5-rime"])
 

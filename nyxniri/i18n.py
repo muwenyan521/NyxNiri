@@ -16,6 +16,16 @@ def set_lang(lang: str) -> None:
     """Set language mode ('zh' or 'en')."""
     global _CURRENT_LANG
     _CURRENT_LANG = "zh" if lang.startswith("zh") else "en"
+    _MSG_CACHE.clear()
+
+def text(zh: str, en: str) -> str:
+    """Pick a one-off bilingual string by active language.
+
+    Escape hatch for diagnostic/status lines not worth a TRANSLATIONS entry
+    (``msg()`` remains the default for keyed strings). Centralizes the per-module
+    ``_text()`` copies that had spread across doctor/fcitx/greeter/gtktheme.
+    """
+    return zh if get_lang() == "zh" else en
 
 TRANSLATIONS: Dict[str, Dict[str, str]] = {
     # Status badges
@@ -25,7 +35,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
     },
     "missing": {
         "zh": f"{Colors.BOLD_RED}[未安装]{Colors.RESET}",
-        "en": f"{Colors.BOLD_RED}[Missing]{Colors.RESET}",
+        "en": f"{Colors.BOLD_RED}[Not installed]{Colors.RESET}",
     },
 
     # Main Menu
@@ -34,48 +44,52 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"\n  {Colors.BOLD_CYAN}── {PROJECT_NAME} Control Panel ──{Colors.RESET}\n",
     },
     "menu_group_deploy": {
-        "zh": f"  {Colors.BOLD_BLUE}部署与安装{Colors.RESET}",
-        "en": f"  {Colors.BOLD_BLUE}Deployment & Setup{Colors.RESET}",
+        "zh": f"  {Colors.BOLD_BLUE}部署{Colors.RESET}",
+        "en": f"  {Colors.BOLD_BLUE}Setup{Colors.RESET}",
     },
     "menu_opt1": {
-        "zh": "部署组件",
-        "en": "Deploy Components (Configs / Wallpapers / Modules)",
+        "zh": "应用配置",
+        "en": "Apply configs",
+    },
+    "menu_opt_preset": {
+        "zh": "切换预设",
+        "en": "Switch preset",
     },
     "menu_opt2": {
-        "zh": "依赖与常用软件",
-        "en": "Dependencies & Apps",
+        "zh": "软件与依赖",
+        "en": "Software & Dependencies",
     },
     "menu_group_maint": {
-        "zh": f"\n  {Colors.BOLD_BLUE}运维与诊断{Colors.RESET}",
-        "en": f"\n  {Colors.BOLD_BLUE}Maintenance{Colors.RESET}",
+        "zh": f"\n  {Colors.BOLD_BLUE}管理{Colors.RESET}",
+        "en": f"\n  {Colors.BOLD_BLUE}Manage{Colors.RESET}",
     },
     "menu_group_system": {
-        "zh": f"\n  {Colors.BOLD_BLUE}系统管理{Colors.RESET}",
-        "en": f"\n  {Colors.BOLD_BLUE}System{Colors.RESET}",
+        "zh": f"\n  {Colors.BOLD_BLUE}诊断{Colors.RESET}",
+        "en": f"\n  {Colors.BOLD_BLUE}Diagnostics{Colors.RESET}",
     },
     "menu_opt3": {
         "zh": "快照管理",
-        "en": "Snapshot Management",
+        "en": "Snapshots",
     },
     "menu_opt4": {
         "zh": "检查更新",
-        "en": "Check Updates & Overwrite",
+        "en": "Check updates",
     },
     "menu_opt5": {
         "zh": "系统诊断",
-        "en": "System Doctor Diagnostics",
+        "en": "System diagnostics",
     },
     "menu_opt6": {
-        "zh": "导出诊断报告",
-        "en": "Export Diagnostic Report (Bug Report)",
+        "zh": "导出报告",
+        "en": "Export report",
     },
     "menu_opt7": {
         "zh": "卸载",
-        "en": "Uninstall & Restore",
+        "en": "Uninstall",
     },
     "menu_opt8": {
-        "zh": "可选模块",
-        "en": "Optional Modules (Greeter / fcitx5 / Purge)",
+        "zh": "扩展",
+        "en": "Extensions",
     },
     "menu_opt0": {
         "zh": "退出",
@@ -104,22 +118,34 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "Rollback Snapshot",
     },
     "snapshot_sub_back": {
-        "zh": "返回主菜单",
-        "en": "Back to Main Menu",
+        "zh": "返回",
+        "en": "Back",
     },
 
-    # Optional Modules Submenu
-    "optmod_menu_title": {
-        "zh": f"\n  {Colors.BOLD_CYAN}── 可选模块 ──{Colors.RESET}\n",
-        "en": f"\n  {Colors.BOLD_CYAN}── Optional Modules ──{Colors.RESET}\n",
+    # Extensions Submenu
+    "ext_menu_title": {
+        "zh": f"\n  {Colors.BOLD_CYAN}── 扩展 ──{Colors.RESET}\n",
+        "en": f"\n  {Colors.BOLD_CYAN}── Extensions ──{Colors.RESET}\n",
     },
-    "optmod_purge": {
-        "zh": "深度清理",
-        "en": "Deep Purge (configs / snapshots / cache / wallpapers)",
+    "ext_sub_greeter": {
+        "zh": "Noctalia Greeter",
+        "en": "Noctalia Greeter",
     },
-    "optmod_back": {
-        "zh": "返回主菜单",
-        "en": "Back to Main Menu",
+    "ext_sub_fcitx": {
+        "zh": "NyxMellow fcitx5 皮肤",
+        "en": "NyxMellow fcitx5 skin",
+    },
+    "ext_sub_gtk": {
+        "zh": "GTK Material You 主题",
+        "en": "GTK Material You theme",
+    },
+    "ext_sub_fisher": {
+        "zh": "fisher 插件管理器",
+        "en": "fisher plugin manager",
+    },
+    "ext_back": {
+        "zh": "返回",
+        "en": "Back",
     },
 
     # Greeter Submenu
@@ -166,6 +192,50 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "Back",
     },
 
+    # GTK Theme Submenu
+    "gtk_menu_title": {
+        "zh": f"\n  {Colors.BOLD_CYAN}── GTK Material You 主题 ──{Colors.RESET}\n",
+        "en": f"\n  {Colors.BOLD_CYAN}── GTK Material You Theme ──{Colors.RESET}\n",
+    },
+    "gtk_sub_install": {
+        "zh": "安装",
+        "en": "Install",
+    },
+    "gtk_sub_status": {
+        "zh": "查看状态",
+        "en": "Show status",
+    },
+    "gtk_sub_uninstall": {
+        "zh": "卸载",
+        "en": "Uninstall",
+    },
+    "gtk_sub_back": {
+        "zh": "返回",
+        "en": "Back",
+    },
+
+    # Fisher Submenu
+    "fisher_menu_title": {
+        "zh": f"\n  {Colors.BOLD_CYAN}── fisher ──{Colors.RESET}\n",
+        "en": f"\n  {Colors.BOLD_CYAN}── fisher ──{Colors.RESET}\n",
+    },
+    "fisher_sub_install": {
+        "zh": "安装",
+        "en": "Install",
+    },
+    "fisher_sub_status": {
+        "zh": "查看状态",
+        "en": "Show status",
+    },
+    "fisher_sub_uninstall": {
+        "zh": "卸载",
+        "en": "Uninstall",
+    },
+    "fisher_sub_back": {
+        "zh": "返回",
+        "en": "Back",
+    },
+
     # Module Status Labels
     "status_installed_enabled": {
         "zh": f"{Colors.BOLD_GREEN}[已安装+已启用]{Colors.RESET}",
@@ -177,7 +247,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
     },
     "status_not_installed": {
         "zh": f"{Colors.BOLD_RED}[未安装]{Colors.RESET}",
-        "en": f"{Colors.BOLD_RED}[Not Installed]{Colors.RESET}",
+        "en": f"{Colors.BOLD_RED}[Not installed]{Colors.RESET}",
     },
     "status_enabled": {
         "zh": f"{Colors.BOLD_GREEN}[已启用]{Colors.RESET}",
@@ -185,11 +255,11 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
     },
     "status_disabled": {
         "zh": f"{Colors.BOLD_YELLOW}[未启用]{Colors.RESET}",
-        "en": f"{Colors.BOLD_YELLOW}[Not Enabled]{Colors.RESET}",
+        "en": f"{Colors.BOLD_YELLOW}[Not enabled]{Colors.RESET}",
     },
     "status_fcitx5_missing": {
         "zh": f"{Colors.BOLD_RED}[fcitx5 未安装]{Colors.RESET}",
-        "en": f"{Colors.BOLD_RED}[fcitx5 Missing]{Colors.RESET}",
+        "en": f"{Colors.BOLD_RED}[fcitx5 not installed]{Colors.RESET}",
     },
     "status_wallpapers_installed": {
         "zh": f"{Colors.BOLD_GREEN}[已下载]{Colors.RESET}",
@@ -197,22 +267,10 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
     },
     "status_wallpapers_missing": {
         "zh": f"{Colors.BOLD_YELLOW}[未下载]{Colors.RESET}",
-        "en": f"{Colors.BOLD_YELLOW}[Not Downloaded]{Colors.RESET}",
+        "en": f"{Colors.BOLD_YELLOW}[Not downloaded]{Colors.RESET}",
     },
 
-    # Optional Modules Menu Labels & Wallpapers
-    "optmod_sub_apps": {
-        "zh": "常用软件",
-        "en": "Recommended Apps",
-    },
-    "optmod_sub_fcitx": {
-        "zh": "NyxMellow fcitx5 皮肤",
-        "en": "NyxMellow fcitx5 Skin",
-    },
-    "optmod_sub_wallpapers": {
-        "zh": "下载壁纸包（约 100MB）",
-        "en": "Wallpaper Pack (~100MB)",
-    },
+    # Wallpapers
     "msg_downloading_wallpapers": {
         "zh": f"\n{Colors.BOLD_BLUE}:: 拉取壁纸包…{Colors.RESET}",
         "en": f"\n{Colors.BOLD_BLUE}:: Downloading wallpapers…{Colors.RESET}",
@@ -244,16 +302,16 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"{Colors.BOLD_BLUE}Cancelled; no configs were written{Colors.RESET}",
     },
     "install_step_configs": {
-        "zh": f"\n{Colors.BOLD_BLUE}:: [{Colors.BOLD_CYAN}{{0}}{Colors.BOLD_BLUE}] 部署配置…{Colors.RESET}",
-        "en": f"\n{Colors.BOLD_BLUE}:: [{Colors.BOLD_CYAN}{{0}}{Colors.BOLD_BLUE}] Deploying configs…{Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_BLUE}:: [{Colors.BOLD_CYAN}{{0}}{Colors.BOLD_BLUE}] 安装配置…{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_BLUE}:: [{Colors.BOLD_CYAN}{{0}}{Colors.BOLD_BLUE}] Installing configs…{Colors.RESET}",
     },
     "install_step_wallpapers": {
-        "zh": f"\n{Colors.BOLD_BLUE}:: [{Colors.BOLD_CYAN}{{0}}{Colors.BOLD_BLUE}] 同步壁纸…{Colors.RESET}",
-        "en": f"\n{Colors.BOLD_BLUE}:: [{Colors.BOLD_CYAN}{{0}}{Colors.BOLD_BLUE}] Syncing wallpapers…{Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_BLUE}:: [{Colors.BOLD_CYAN}{{0}}{Colors.BOLD_BLUE}] 安装壁纸…{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_BLUE}:: [{Colors.BOLD_CYAN}{{0}}{Colors.BOLD_BLUE}] Installing wallpapers…{Colors.RESET}",
     },
     "install_step_deps": {
-        "zh": f"\n{Colors.BOLD_BLUE}:: [{Colors.BOLD_CYAN}{{0}}{Colors.BOLD_BLUE}] 检查与安装依赖…{Colors.RESET}",
-        "en": f"\n{Colors.BOLD_BLUE}:: [{Colors.BOLD_CYAN}{{0}}{Colors.BOLD_BLUE}] Checking dependencies…{Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_BLUE}:: [{Colors.BOLD_CYAN}{{0}}{Colors.BOLD_BLUE}] 安装依赖…{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_BLUE}:: [{Colors.BOLD_CYAN}{{0}}{Colors.BOLD_BLUE}] Installing dependencies…{Colors.RESET}",
     },
     "install_step_fcitx": {
         "zh": f"\n{Colors.BOLD_BLUE}:: [{Colors.BOLD_CYAN}{{0}}{Colors.BOLD_BLUE}] 配置 fcitx5 皮肤…{Colors.RESET}",
@@ -267,62 +325,62 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
     # Summary screen
     "summary_title_install": {
         "zh": "主人，NyxNiri 装完了喵~",
-        "en": "Master, NyxNiri is all set nya~",
+        "en": "All set, nya~",
     },
     "summary_title_update": {
         "zh": "主人，NyxNiri 更新完了喵~",
-        "en": "Master, NyxNiri has been updated nya~",
+        "en": "All updated, nya~",
     },
     "summary_title_test": {
         "zh": "测试部署完成喵~",
         "en": "Test deploy complete nya~",
     },
     "summary_title_failed": {
-        "zh": "部署未完成",
-        "en": "Deployment incomplete",
+        "zh": "安装未完成",
+        "en": "Installation incomplete",
     },
     "summary_section_details": {
-        "zh": "部署明细",
-        "en": "Deployment Details",
+        "zh": "明细",
+        "en": "Details",
     },
     "summary_item_configs_ok": {
-        "zh": "配置:       已部署 {0} 项",
-        "en": "Configs:        {0} deployed",
+        "zh": "配置:       已安装 {0} 项",
+        "en": "Configs:        {0} installed",
     },
     "summary_item_configs_skip": {
         "zh": "配置:       已跳过",
         "en": "Configs:        Skipped",
     },
     "summary_item_configs_failed": {
-        "zh": "配置:       部署失败 ({0})",
+        "zh": "配置:       安装失败 ({0})",
         "en": "Configs:        Failed ({0})",
     },
     "summary_item_wallpapers_downloaded": {
-        "zh": "壁纸图包:   已下载并部署",
-        "en": "Wallpapers:     Downloaded and deployed",
+        "zh": "壁纸包:     已下载",
+        "en": "Wallpapers:     Downloaded",
     },
     "summary_item_wallpapers_existing": {
-        "zh": "壁纸图包:   已存在",
-        "en": "Wallpapers:     Existing pack kept",
+        "zh": "壁纸包:     已存在",
+        "en": "Wallpapers:     Already present",
     },
     "summary_item_wallpapers_fallback": {
-        "zh": "壁纸图包:   仅内置壁纸",
-        "en": "Wallpapers:     Built-in fallback only",
+        "zh": "壁纸包:     仅内置",
+        "en": "Wallpapers:     Built-in only",
     },
     "summary_item_wallpapers_refresh_failed": {
-        "zh": "壁纸图包:   刷新失败，已保留原包",
-        "en": "Wallpapers:     Refresh failed; existing pack kept",
+        "zh": "壁纸包:     刷新失败，已保留原包",
+        "en": "Wallpapers:     Refresh failed; kept existing",
     },
     "summary_item_wallpapers_failed_fallback": {
-        "zh": "壁纸图包:   下载失败，已使用内置壁纸",
-        "en": "Wallpapers:     Download failed; using built-in fallback",
+        "zh": "壁纸包:     下载失败，已用内置",
+        "en": "Wallpapers:     Download failed; using built-in",
     },
     "summary_item_wallpapers_failed": {
-        "zh": "壁纸图包:   下载失败",
+        "zh": "壁纸包:     下载失败",
         "en": "Wallpapers:     Download failed",
     },
     "summary_item_wallpapers_skip": {
-        "zh": "壁纸图包:   已跳过",
+        "zh": "壁纸包:     已跳过",
         "en": "Wallpapers:     Skipped",
     },
     "summary_item_fcitx_ok": {
@@ -334,8 +392,8 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "Input Method:   Skipped",
     },
     "summary_item_deps_ok": {
-        "zh": "系统依赖:   环境已就绪",
-        "en": "System Deps:    Environment Ready",
+        "zh": "系统依赖:   依赖已就绪",
+        "en": "System Deps:    Ready",
     },
     "summary_item_deps_skip": {
         "zh": "系统依赖:   未完全满足",
@@ -346,8 +404,8 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "Greeter:        Noctalia Greeter",
     },
     "summary_section_preserved": {
-        "zh": "保留的配置清单 (自动继承)",
-        "en": "Preserved Configurations (Auto-inherited)",
+        "zh": "保留的配置",
+        "en": "Preserved configs",
     },
     "summary_section_next": {
         "zh": "下一步",
@@ -384,7 +442,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "Exit",
     },
     "summary_action_hint": {
-        "zh": f"  {Colors.DARK_GRAY}[↑/↓/j/k] 移动焦点  [Enter/Space] 选择  [0/q] 退出{Colors.RESET}",
+        "zh": f"  {Colors.DARK_GRAY}[↑/↓/j/k] 移动  [Enter/Space] 选择  [0/q] 退出{Colors.RESET}",
         "en": f"  {Colors.DARK_GRAY}[↑/↓/j/k] Move  [Enter/Space] Select  [0/q] Exit{Colors.RESET}",
     },
     "summary_action_hint_short": {
@@ -402,7 +460,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"\n{Colors.BOLD_BLUE}:: [test] Idempotent test deploy (skipped backup & deps)…{Colors.RESET}",
     },
     "menu_hint": {
-        "zh": f"\n  {Colors.DARK_GRAY}[↑/↓/j/k] 移动焦点  [Enter/Space] 选择  [0/q] 退出{Colors.RESET}",
+        "zh": f"\n  {Colors.DARK_GRAY}[↑/↓/j/k] 移动  [Enter/Space] 选择  [0/q] 退出{Colors.RESET}",
         "en": f"\n  {Colors.DARK_GRAY}[↑/↓/j/k] Move  [Enter/Space] Select  [0/q] Exit{Colors.RESET}",
     },
     "menu_hint_short": {
@@ -410,7 +468,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"\n  {Colors.DARK_GRAY}[↑/↓] Move  [Enter] Select  [q] Exit{Colors.RESET}",
     },
     "submenu_hint": {
-        "zh": f"\n  {Colors.DARK_GRAY}[↑/↓/j/k] 移动焦点  [Enter/Space] 选择  [0/q] 返回{Colors.RESET}",
+        "zh": f"\n  {Colors.DARK_GRAY}[↑/↓/j/k] 移动  [Enter/Space] 选择  [0/q] 返回{Colors.RESET}",
         "en": f"\n  {Colors.DARK_GRAY}[↑/↓/j/k] Move  [Enter/Space] Select  [0/q] Back{Colors.RESET}",
     },
     "submenu_hint_short": {
@@ -430,8 +488,8 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"\n{Colors.BOLD_BLUE}:: Collecting diagnostic data…{Colors.RESET}",
     },
     "report_done": {
-        "zh": f"{Colors.BOLD_GREEN}[✓] 诊断报告已导出至:{Colors.RESET} {{0}}\n{Colors.BOLD_CYAN}提示: 提交 Issue 请附带此文件{Colors.RESET}\n{Colors.DARK_GRAY}QQ 群: 631425889 | Telegram: @Echoes678{Colors.RESET}",
-        "en": f"{Colors.BOLD_GREEN}[✓] Bug Report exported to:{Colors.RESET} {{0}}\n{Colors.BOLD_CYAN}Hint: Please attach this file when opening an issue{Colors.RESET}\n{Colors.DARK_GRAY}QQ Group: 631425889 | Telegram: @Echoes678{Colors.RESET}",
+        "zh": f"{Colors.BOLD_GREEN}[✓] 诊断报告已导出至:{Colors.RESET} {{0}}\n{Colors.BOLD_CYAN}提交 Issue 请附带此文件{Colors.RESET}\n{Colors.DARK_GRAY}QQ 群: 631425889 | Telegram: @Echoes678{Colors.RESET}",
+        "en": f"{Colors.BOLD_GREEN}[✓] Report exported to:{Colors.RESET} {{0}}\n{Colors.BOLD_CYAN}Please attach this file when opening an issue{Colors.RESET}\n{Colors.DARK_GRAY}QQ Group: 631425889 | Telegram: @Echoes678{Colors.RESET}",
     },
 
     # Overwrite & Upgrade
@@ -440,74 +498,138 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"\n  {Colors.BOLD_CYAN}── NyxNiri Config Update ──{Colors.RESET}\n",
     },
     "overwrite_opt1": {
-        "zh": "覆盖/更新组件",
-        "en": "Overwrite / Update Components",
+        "zh": "更新组件",
+        "en": "Update components",
     },
     "overwrite_opt2": {
-        "zh": "查看配置差异",
-        "en": "View Config Diff",
+        "zh": "查看改动",
+        "en": "View changes",
     },
     "overwrite_opt3": {
-        "zh": "仅更新脚本代码",
-        "en": "Code Update Only",
+        "zh": "仅更新代码",
+        "en": "Update code only",
     },
     "selective_hint": {
         "zh": f"  {Colors.DARK_GRAY}[↑/↓/j/k] 移动  [Space] 切换  [a] 全选  [n] 清空  [Enter] 确认  [Esc] 取消{Colors.RESET}",
         "en": f"  {Colors.DARK_GRAY}[↑/↓/j/k] Move  [Space] Toggle  [a] All  [n] None  [Enter] Confirm  [Esc] Cancel{Colors.RESET}",
     },
     "upgrading_selected": {
-        "zh": f"\n{Colors.BOLD_BLUE}:: 正在部署选中组件…{Colors.RESET}",
-        "en": f"\n{Colors.BOLD_BLUE}:: Applying selected components…{Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_BLUE}:: 正在更新选中组件…{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_BLUE}:: Updating selected components…{Colors.RESET}",
     },
     "master_menu_title": {
-        "zh": f"\n  {Colors.BOLD_CYAN}── 组件部署清单 ──{Colors.RESET}\n",
-        "en": f"\n  {Colors.BOLD_CYAN}── Deployment Checklist ──{Colors.RESET}\n",
+        "zh": f"\n  {Colors.BOLD_CYAN}── 选择组件 ──{Colors.RESET}\n",
+        "en": f"\n  {Colors.BOLD_CYAN}── Select components ──{Colors.RESET}\n",
     },
     "master_item_config": {
         "zh": "配置: {0}",
         "en": "Config: {0}",
     },
     "master_item_module": {
-        "zh": "可选模块: {0}",
-        "en": "Optional Module: {0}",
+        "zh": "扩展: {0}",
+        "en": "Extension: {0}",
     },
     "master_item_asset": {
-        "zh": "资源: {0}",
-        "en": "Asset: {0}",
+        "zh": "壁纸包: {0}",
+        "en": "Wallpapers: {0}",
     },
     "master_item_behavior": {
-        "zh": "\n  ── 部署行为 ──",
-        "en": "\n  ── Deployment Behaviors ──",
+        "zh": "\n  ── 选项 ──",
+        "en": "\n  ── Options ──",
     },
     "master_item_backup": {
-        "zh": "部署前自动创建快照",
-        "en": "Auto-create safe snapshot before deploy",
+        "zh": "安装前自动创建快照",
+        "en": "Auto-create snapshot before install",
     },
     "diff_viewer_title": {
-        "zh": f"\n{Colors.BOLD_CYAN}:: 配置差异对比 (按 q 退出){Colors.RESET}",
-        "en": f"\n{Colors.BOLD_CYAN}:: Configuration Diff (Press 'q' to quit){Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_CYAN}:: 配置改动 (按 q 退出){Colors.RESET}",
+        "en": f"\n{Colors.BOLD_CYAN}:: Changes (press q to quit){Colors.RESET}",
     },
 
-    # Uninstall & Restore
+    # Uninstall
     "uninstall_title": {
-        "zh": f"\n  {Colors.BOLD_CYAN}── 卸载与复原 ──{Colors.RESET}\n",
-        "en": f"\n  {Colors.BOLD_RED}── NyxNiri Uninstall & Environment Restoration ──{Colors.RESET}\n",
+        "zh": f"\n  {Colors.BOLD_CYAN}── 卸载 ──{Colors.RESET}\n",
+        "en": f"\n  {Colors.BOLD_CYAN}── Uninstall ──{Colors.RESET}\n",
     },
-    "uninstall_opt1": {
-        "zh": "标准卸载 (归档当前配置并移除文件与 CLI)",
-        "en": "Standard Uninstall (Archive configs, remove CLI)",
+    "uninstall_hint": {
+        "zh": f"  {Colors.DARK_GRAY}空格 切换  a 全选  n 全不选  Enter 确认  q 取消{Colors.RESET}",
+        "en": f"  {Colors.DARK_GRAY}Space toggle  a all  n none  Enter confirm  q cancel{Colors.RESET}",
     },
-    "uninstall_opt2": {
-        "zh": "环境复原 (恢复至初始备份)",
-        "en": "Restore to Original State",
+    "uninstall_group_user": {
+        "zh": f"  {Colors.BOLD_BLUE}用户配置{Colors.RESET}",
+        "en": f"  {Colors.BOLD_BLUE}User config{Colors.RESET}",
     },
-    "uninstall_opt3": {
-        "zh": "深度清理 (清除所有配置、快照、缓存与壁纸)",
-        "en": "Deep Purge (Remove configs, snapshots, cache & wallpapers)",
+    "uninstall_group_self": {
+        "zh": f"  {Colors.BOLD_BLUE}NyxNiri 自身{Colors.RESET}",
+        "en": f"  {Colors.BOLD_BLUE}NyxNiri itself{Colors.RESET}",
     },
-    "uninstall_opt4": {
-        "zh": "取消返回",
-        "en": "Cancel",
+    "uninstall_group_modules": {
+        "zh": f"  {Colors.BOLD_BLUE}扩展{Colors.RESET}",
+        "en": f"  {Colors.BOLD_BLUE}Extensions{Colors.RESET}",
+    },
+    "uninstall_item_configs": {
+        "zh": "~/.config/<{0} 个 app 配置>",
+        "en": "~/.config/<{0} app configs>",
+    },
+    "uninstall_item_nyx_dir": {
+        "zh": "~/.config/NyxNiri/  (快照 + 预设)",
+        "en": "~/.config/NyxNiri/  (snapshots + presets)",
+    },
+    "uninstall_item_archives": {
+        "zh": "~/.config/NyxNiri_archive_*  (历史归档)",
+        "en": "~/.config/NyxNiri_archive_*  (past archives)",
+    },
+    "uninstall_item_wallpapers": {
+        "zh": "~/Pictures/Wallpapers/",
+        "en": "~/Pictures/Wallpapers/",
+    },
+    "uninstall_item_cli": {
+        "zh": "~/.local/bin/nyxniri  (命令入口)",
+        "en": "~/.local/bin/nyxniri  (CLI entry)",
+    },
+    "uninstall_item_state": {
+        "zh": "~/.local/state/NyxNiri/  (锁 + 日志)",
+        "en": "~/.local/state/NyxNiri/  (lock + log)",
+    },
+    "uninstall_item_cache": {
+        "zh": "~/.cache/NyxNiri/  (curl 缓存)",
+        "en": "~/.cache/NyxNiri/  (curl cache)",
+    },
+    "uninstall_item_fcitx": {
+        "zh": "fcitx NyxMellow 皮肤  (~/.local/share/fcitx5/themes/nyxmellow/)",
+        "en": "fcitx NyxMellow skin  (~/.local/share/fcitx5/themes/nyxmellow/)",
+    },
+    "uninstall_item_gtk": {
+        "zh": "GTK Material You 主题  (~/.config/gtk-3.0,4.0/gtk.css)",
+        "en": "GTK Material You theme  (~/.config/gtk-3.0,4.0/gtk.css)",
+    },
+    "uninstall_item_greeter": {
+        "zh": "Noctalia Greeter  [sudo]",
+        "en": "Noctalia Greeter  [sudo]",
+    },
+    "uninstall_item_fisher": {
+        "zh": "fisher + fish 插件  (~/.config/fish/functions/fisher.fish, conf.d/)",
+        "en": "fisher + fish plugins  (~/.config/fish/functions/fisher.fish, conf.d/)",
+    },
+    "uninstall_removed": {
+        "zh": f"{Colors.BOLD_GREEN}[✓]{Colors.RESET} 已删除: {{0}}",
+        "en": f"{Colors.BOLD_GREEN}[✓]{Colors.RESET} Removed: {{0}}",
+    },
+    "uninstall_skipped": {
+        "zh": f"{Colors.DARK_GRAY}[!]{Colors.RESET} 不存在，跳过: {{0}}",
+        "en": f"{Colors.DARK_GRAY}[!]{Colors.RESET} Not present, skipped: {{0}}",
+    },
+    "uninstall_failed": {
+        "zh": f"{Colors.BOLD_RED}[✗]{Colors.RESET} 失败: {{0}}",
+        "en": f"{Colors.BOLD_RED}[✗]{Colors.RESET} Failed: {{0}}",
+    },
+    "uninstall_module_done": {
+        "zh": f"{Colors.BOLD_GREEN}[✓]{Colors.RESET} 已清理: {{0}}",
+        "en": f"{Colors.BOLD_GREEN}[✓]{Colors.RESET} Cleaned: {{0}}",
+    },
+    "uninstall_system_hint": {
+        "zh": f"\n  {Colors.BOLD_YELLOW}源码包归 pacman 管，完全卸载请再跑: sudo pacman -R nyxniri-git{Colors.RESET}",
+        "en": f"\n  {Colors.BOLD_YELLOW}The system package is managed by pacman; run: sudo pacman -R nyxniri-git{Colors.RESET}",
     },
     "uninstall_archived": {
         "zh": f"{Colors.BOLD_GREEN}[✓] 当前配置已归档至:{Colors.RESET} {{0}}",
@@ -519,23 +641,23 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
     },
     "purge_done": {
         "zh": f"{Colors.BOLD_GREEN}[✓] 深度清理完成{Colors.RESET}",
-        "en": f"{Colors.BOLD_GREEN}[✓] Deep purge complete{Colors.RESET}",
+        "en": f"{Colors.BOLD_GREEN}[✓] Deep clean complete{Colors.RESET}",
     },
     "purge_warning": {
-        "zh": f"\n{Colors.BOLD_RED}[!] 将删除 NyxNiri 管理的配置、全部快照、缓存和壁纸。此操作不可撤销。{Colors.RESET}",
-        "en": f"\n{Colors.BOLD_RED}[!] This removes managed configs, every snapshot, cache, and wallpapers. It cannot be undone.{Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_RED}[!] 将清空配置、快照、缓存与壁纸。不可撤销。{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_RED}[!] This clears configs, snapshots, cache, and wallpapers. It cannot be undone.{Colors.RESET}",
     },
     "purge_prompt": {
         "zh": "▸ 确认深度清理？[y/N]: ",
-        "en": "▸ Continue with deep purge? [y/N]: ",
+        "en": "▸ Continue with deep clean? [y/N]: ",
     },
     "purge_cancelled": {
         "zh": f"{Colors.BOLD_BLUE}已取消深度清理{Colors.RESET}",
-        "en": f"{Colors.BOLD_BLUE}Deep purge cancelled{Colors.RESET}",
+        "en": f"{Colors.BOLD_BLUE}Deep clean cancelled{Colors.RESET}",
     },
     "purge_start": {
         "zh": f"\n{Colors.BOLD_RED}:: 开始深度清理…{Colors.RESET}",
-        "en": f"\n{Colors.BOLD_RED}:: Starting deep purge…{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_RED}:: Starting deep clean…{Colors.RESET}",
     },
     "restore_origin_done": {
         "zh": f"{Colors.BOLD_GREEN}[✓] 已恢复至初始环境{Colors.RESET}",
@@ -620,29 +742,29 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"{Colors.BOLD_GREEN}[✓] Deleted {{0}} snapshots, {{1}} remaining{Colors.RESET}",
     },
 
-    # Dependencies & Apps
+    # Software & Dependencies
     "deps_menu_title": {
-        "zh": f"\n  {Colors.BOLD_CYAN}── 依赖与常用软件 ──{Colors.RESET}\n",
-        "en": f"\n  {Colors.BOLD_CYAN}── Dependencies & Apps ──{Colors.RESET}\n",
+        "zh": f"\n  {Colors.BOLD_CYAN}── 软件与依赖 ──{Colors.RESET}\n",
+        "en": f"\n  {Colors.BOLD_CYAN}── Software & Dependencies ──{Colors.RESET}\n",
     },
     "deps_sub_core": {
         "zh": "核心依赖",
-        "en": "Core Dependencies",
+        "en": "Core dependencies",
     },
     "deps_sub_apps": {
         "zh": "常用软件",
-        "en": "Recommended Apps",
+        "en": "Recommended apps",
     },
     "deps_sub_back": {
-        "zh": "返回主菜单",
-        "en": "Back to Main Menu",
+        "zh": "返回",
+        "en": "Back",
     },
     "dep_menu_title": {
         "zh": f"\n  {Colors.BOLD_CYAN}── 核心依赖 ──{Colors.RESET}\n",
         "en": f"\n  {Colors.BOLD_CYAN}── Core Dependencies ──{Colors.RESET}\n",
     },
     "dep_menu_hint": {
-        "zh": f"  {Colors.DARK_GRAY}[↑/↓/j/k] 移动焦点  [Space] 切换  [a] 全选  [n] 清空  [Enter] 安装  [0/q] 返回{Colors.RESET}",
+        "zh": f"  {Colors.DARK_GRAY}[↑/↓/j/k] 移动  [Space] 切换  [a] 全选  [n] 清空  [Enter] 安装  [0/q] 返回{Colors.RESET}",
         "en": f"  {Colors.DARK_GRAY}[↑/↓/j/k] Move  [Space] Toggle  [a] All  [n] None  [Enter] Install  [0/q] Back{Colors.RESET}",
     },
     "installing_selected": {
@@ -662,7 +784,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"\n  {Colors.BOLD_CYAN}── Recommended Apps ──{Colors.RESET}\n",
     },
     "opt_apps_menu_hint": {
-        "zh": f"  {Colors.DARK_GRAY}[↑/↓/j/k] 移动焦点  [Space] 切换  [a] 全选  [n] 清空  [Enter] 安装  [0/q] 返回{Colors.RESET}",
+        "zh": f"  {Colors.DARK_GRAY}[↑/↓/j/k] 移动  [Space] 切换  [a] 全选  [n] 清空  [Enter] 安装  [0/q] 返回{Colors.RESET}",
         "en": f"  {Colors.DARK_GRAY}[↑/↓/j/k] Move  [Space] Toggle  [a] All  [n] None  [Enter] Install  [0/q] Back{Colors.RESET}",
     },
     "app_nautilus": {
@@ -727,15 +849,15 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
     },
     "opt_apps_install_done": {
         "zh": f"{Colors.BOLD_GREEN}[✓] 常用软件安装完成{Colors.RESET}",
-        "en": f"{Colors.BOLD_GREEN}[✓] Recommended apps installation completed{Colors.RESET}",
+        "en": f"{Colors.BOLD_GREEN}[✓] Recommended apps installed{Colors.RESET}",
     },
     "opt_apps_none_selected": {
         "zh": f"{Colors.DARK_GRAY}未选择任何软件。{Colors.RESET}",
         "en": f"{Colors.DARK_GRAY}No apps selected.{Colors.RESET}",
     },
     "interactive_terminal_required": {
-        "zh": f"{Colors.BOLD_YELLOW}[!] 此命令需要交互式终端；未执行安装。{Colors.RESET}",
-        "en": f"{Colors.BOLD_YELLOW}[!] This command needs an interactive terminal; nothing was installed.{Colors.RESET}",
+        "zh": f"{Colors.BOLD_YELLOW}[!] 需要交互式终端。{Colors.RESET}",
+        "en": f"{Colors.BOLD_YELLOW}[!] Needs an interactive terminal.{Colors.RESET}",
     },
     "new_deps_detected": {
         "zh": f"\n  {Colors.BOLD_YELLOW}[!] 检测到未安装的依赖:{Colors.RESET} {{0}}",
@@ -752,8 +874,8 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
 
     # Greeter
     "greeter_install_title": {
-        "zh": f"\n{Colors.BOLD_PURPLE}[ 可选模块 ] Noctalia Greeter 安装与配置{Colors.RESET}",
-        "en": f"\n{Colors.BOLD_PURPLE}[ Optional Module ] Noctalia Greeter{Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_PURPLE}:: Noctalia Greeter 安装{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_PURPLE}:: Noctalia Greeter{Colors.RESET}",
     },
     "greeter_install_pkgs": {
         "zh": f"\n{Colors.BOLD_BLUE}:: 正在安装 greetd 与 noctalia-greeter…{Colors.RESET}",
@@ -780,8 +902,8 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"{Colors.BOLD_YELLOW}[!] Conflicting display manager detected ({{0}}). Please disable it manually.{Colors.RESET}",
     },
     "greeter_config_written": {
-        "zh": f"{Colors.BOLD_GREEN}[✓] 已写入 greetd 配置: {{0}} (原配置已备份){Colors.RESET}",
-        "en": f"{Colors.BOLD_GREEN}[✓] greetd config written: {{0}} (previous config backed up){Colors.RESET}",
+        "zh": f"{Colors.BOLD_GREEN}[✓] 已写入 greetd 配置: {{0}}{Colors.RESET}",
+        "en": f"{Colors.BOLD_GREEN}[✓] greetd config written: {{0}}{Colors.RESET}",
     },
     "greeter_config_failed": {
         "zh": f"{Colors.BOLD_RED}[!] 写入 greetd 配置失败: {{0}} (需要 sudo 权限){Colors.RESET}",
@@ -820,24 +942,28 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"{Colors.BOLD_RED}[!] Failed to enable greetd. Run manually: sudo systemctl enable greetd{Colors.RESET}",
     },
     "greeter_reboot_hint": {
-        "zh": f"{Colors.BOLD_CYAN}提示: 重启后登录界面生效。主题同步路径: Noctalia 设置 → 安全 → Noctalia Greeter → Sync Now{Colors.RESET}",
-        "en": f"{Colors.BOLD_CYAN}Hint: Active after reboot. Sync theme via Noctalia Settings → Security → Noctalia Greeter → Sync Now.{Colors.RESET}",
+        "zh": f"{Colors.BOLD_CYAN}重启后生效。主题同步: Noctalia 设置 → 安全 → Noctalia Greeter → Sync Now{Colors.RESET}",
+        "en": f"{Colors.BOLD_CYAN}Active after reboot. Sync theme: Noctalia Settings → Security → Noctalia Greeter → Sync Now{Colors.RESET}",
     },
     "greeter_status_title": {
-        "zh": f"\n{Colors.BOLD_CYAN}:: Noctalia Greeter 状态检查{Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_CYAN}:: Noctalia Greeter 状态{Colors.RESET}",
         "en": f"\n{Colors.BOLD_CYAN}:: Noctalia Greeter status{Colors.RESET}",
     },
+    "fisher_status_title": {
+        "zh": f"\n{Colors.BOLD_CYAN}:: fisher 插件管理器状态{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_CYAN}:: fisher plugin manager status{Colors.RESET}",
+    },
     "greeter_status_ok": {
-        "zh": f"{Colors.BOLD_GREEN}[✓] Greeter 已就绪{Colors.RESET}",
-        "en": f"{Colors.BOLD_GREEN}[✓] Greeter ready{Colors.RESET}",
+        "zh": f"{Colors.BOLD_GREEN}[✓] 登录界面已就绪{Colors.RESET}",
+        "en": f"{Colors.BOLD_GREEN}[✓] Login screen ready{Colors.RESET}",
     },
     "greeter_status_hint": {
-        "zh": f"{Colors.BOLD_CYAN}提示: 运行 nyxniri greeter install 完成配置{Colors.RESET}",
-        "en": f"{Colors.BOLD_CYAN}Hint: Run nyxniri greeter install to set up.{Colors.RESET}",
+        "zh": f"{Colors.BOLD_CYAN}运行 nyxniri greeter install 完成配置{Colors.RESET}",
+        "en": f"{Colors.BOLD_CYAN}Run nyxniri greeter install to set up{Colors.RESET}",
     },
     "greeter_uninstall_title": {
-        "zh": f"\n{Colors.BOLD_YELLOW}:: Noctalia Greeter 卸载 (保留软件包){Colors.RESET}",
-        "en": f"\n{Colors.BOLD_YELLOW}:: Noctalia Greeter uninstall (keeps packages){Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_YELLOW}:: 卸载 Noctalia Greeter{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_YELLOW}:: Uninstall Noctalia Greeter{Colors.RESET}",
     },
     "greeter_uninstall_restored": {
         "zh": f"{Colors.BOLD_GREEN}[✓] 已还原 greetd 配置: {{0}}{Colors.RESET}",
@@ -851,15 +977,19 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "zh": f"{Colors.BOLD_GREEN}[✓] 已移除 polkit 免密规则{Colors.RESET}",
         "en": f"{Colors.BOLD_GREEN}[✓] polkit rule removed{Colors.RESET}",
     },
+    "greeter_uninstall_state_dir": {
+        "zh": f"{Colors.BOLD_GREEN}[✓] 已清理状态目录: {{0}}{Colors.RESET}",
+        "en": f"{Colors.BOLD_GREEN}[✓] Removed state directory: {{0}}{Colors.RESET}",
+    },
     "greeter_uninstall_done": {
-        "zh": f"{Colors.BOLD_GREEN}[✓] Greeter 卸载完成。若需移除软件包: paru -R noctalia-greeter greetd{Colors.RESET}",
-        "en": f"{Colors.BOLD_GREEN}[✓] Greeter uninstalled. To remove packages: paru -R noctalia-greeter greetd{Colors.RESET}",
+        "zh": f"{Colors.BOLD_GREEN}[✓] 登录界面已卸载。若需移除软件包: paru -R noctalia-greeter greetd{Colors.RESET}",
+        "en": f"{Colors.BOLD_GREEN}[✓] Login screen uninstalled. To remove packages: paru -R noctalia-greeter greetd{Colors.RESET}",
     },
 
     # Fcitx5
     "fcitx_install_title": {
-        "zh": f"\n{Colors.BOLD_PURPLE}[ 可选模块 ] NyxMellow 动态 fcitx5 皮肤配置{Colors.RESET}",
-        "en": f"\n{Colors.BOLD_PURPLE}[ Optional Module ] NyxMellow fcitx5 skin{Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_PURPLE}:: NyxMellow fcitx5 皮肤安装{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_PURPLE}:: NyxMellow fcitx5 skin{Colors.RESET}",
     },
     "fcitx_skip_no_fcitx5": {
         "zh": f"{Colors.BOLD_YELLOW}[!] 未找到 fcitx5，已跳过皮肤激活 (安装后运行 nyxniri fcitx install 即可){Colors.RESET}",
@@ -886,12 +1016,12 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"{Colors.BOLD_GREEN}[✓] fcitx5 restarted{Colors.RESET}",
     },
     "fcitx_status_title": {
-        "zh": f"\n{Colors.BOLD_CYAN}:: NyxMellow 动态 fcitx5 皮肤状态{Colors.RESET}",
-        "en": f"\n{Colors.BOLD_CYAN}:: NyxMellow dynamic fcitx5 skin status{Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_CYAN}:: NyxMellow fcitx5 皮肤状态{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_CYAN}:: NyxMellow fcitx5 skin status{Colors.RESET}",
     },
     "fcitx_uninstall_title": {
-        "zh": f"\n{Colors.BOLD_YELLOW}:: NyxMellow 动态 fcitx5 皮肤卸载{Colors.RESET}",
-        "en": f"\n{Colors.BOLD_YELLOW}:: NyxMellow dynamic fcitx5 skin uninstall{Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_YELLOW}:: 卸载 NyxMellow fcitx5 皮肤{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_YELLOW}:: Uninstall NyxMellow fcitx5 skin{Colors.RESET}",
     },
     "fcitx_uninstall_done": {
         "zh": f"{Colors.BOLD_GREEN}[✓] NyxMellow 皮肤已卸载，fcitx5 主题已还原{Colors.RESET}",
@@ -908,8 +1038,8 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
 
     # GTK Material You Theme
     "gtk_install_title": {
-        "zh": f"\n{Colors.BOLD_PURPLE}:: GTK Material You 主题渲染{Colors.RESET}",
-        "en": f"\n{Colors.BOLD_PURPLE}:: GTK Material You theme render{Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_PURPLE}:: GTK Material You 主题安装{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_PURPLE}:: GTK Material You theme{Colors.RESET}",
     },
     "gtk_render_ok": {
         "zh": f"{Colors.BOLD_GREEN}[✓] Noctalia 已按当前主题渲染 GTK 配色{Colors.RESET}",
@@ -920,16 +1050,16 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"{Colors.BOLD_YELLOW}[!] noctalia not running; GTK theme will apply on next theme change{Colors.RESET}",
     },
     "gtk_not_registered": {
-        "zh": f"{Colors.BOLD_YELLOW}[!] GTK 模板未注册，请先运行 nyxniri install 部署 noctalia 配置{Colors.RESET}",
-        "en": f"{Colors.BOLD_YELLOW}[!] GTK templates not registered; run nyxniri install to deploy noctalia config{Colors.RESET}",
+        "zh": f"{Colors.BOLD_YELLOW}[!] GTK 模板未注册，请先运行 nyxniri install 安装 noctalia 配置{Colors.RESET}",
+        "en": f"{Colors.BOLD_YELLOW}[!] GTK templates not registered; run nyxniri install to set up noctalia config{Colors.RESET}",
     },
     "gtk_status_title": {
         "zh": f"\n{Colors.BOLD_CYAN}:: GTK Material You 主题状态{Colors.RESET}",
         "en": f"\n{Colors.BOLD_CYAN}:: GTK Material You theme status{Colors.RESET}",
     },
     "gtk_uninstall_title": {
-        "zh": f"\n{Colors.BOLD_YELLOW}:: GTK Material You 主题卸载{Colors.RESET}",
-        "en": f"\n{Colors.BOLD_YELLOW}:: GTK Material You theme uninstall{Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_YELLOW}:: 卸载 GTK Material You 主题{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_YELLOW}:: Uninstall GTK Material You theme{Colors.RESET}",
     },
     "gtk_unregistered": {
         "zh": f"{Colors.BOLD_GREEN}[✓] 已从 {{0}} 配置中移除 GTK 模板注册{Colors.RESET}",
@@ -944,7 +1074,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"{Colors.BOLD_GREEN}[✓] GTK Material You theme removed; GTK apps reverted to adw-gtk3 defaults{Colors.RESET}",
     },
 
-    # Core Deployment & Backup
+    # Core Install & Backup
     "backing_up": {
         "zh": f"\n{Colors.BOLD_BLUE}:: 正在创建配置快照…{Colors.RESET}",
         "en": f"\n{Colors.BOLD_BLUE}:: Creating configuration snapshot…{Colors.RESET}",
@@ -954,26 +1084,26 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"{Colors.BOLD_GREEN}[✓] Snapshot created: {{0}}{Colors.RESET}",
     },
     "copying_configs": {
-        "zh": f"\n{Colors.BOLD_BLUE}:: 正在部署配置…{Colors.RESET}",
-        "en": f"\n{Colors.BOLD_BLUE}:: Deploying configurations…{Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_BLUE}:: 正在安装配置…{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_BLUE}:: Installing configs…{Colors.RESET}",
     },
     "copy_done": {
-        "zh": f"{Colors.BOLD_GREEN}[✓] 配置已部署{Colors.RESET}",
-        "en": f"{Colors.BOLD_GREEN}[✓] Configurations deployed{Colors.RESET}",
+        "zh": f"{Colors.BOLD_GREEN}[✓] 配置已安装{Colors.RESET}",
+        "en": f"{Colors.BOLD_GREEN}[✓] Configs installed{Colors.RESET}",
     },
     "deploy_failed": {
-        "zh": f"{Colors.BOLD_RED}[✗] 配置部署失败: {{0}}。已停止后续步骤。{Colors.RESET}",
-        "en": f"{Colors.BOLD_RED}[✗] Configuration deployment failed: {{0}}. Remaining steps stopped.{Colors.RESET}",
+        "zh": f"{Colors.BOLD_RED}[✗] 配置安装失败: {{0}}。已停止后续步骤。{Colors.RESET}",
+        "en": f"{Colors.BOLD_RED}[✗] Config install failed: {{0}}. Remaining steps stopped.{Colors.RESET}",
     },
     "log_deploy_config_failed": {
-        "zh": f"  {Colors.BOLD_RED}[✗]{Colors.RESET} 配置部署失败: {{0}}",
-        "en": f"  {Colors.BOLD_RED}[✗]{Colors.RESET} Config deployment failed: {{0}}",
+        "zh": f"  {Colors.BOLD_RED}[✗]{Colors.RESET} 配置安装失败: {{0}}",
+        "en": f"  {Colors.BOLD_RED}[✗]{Colors.RESET} Config install failed: {{0}}",
     },
 
     # Doctor
     "running_doctor": {
-        "zh": f"\n{Colors.BOLD_PURPLE}:: 正在运行 System Doctor 进行系统诊断…{Colors.RESET}",
-        "en": f"\n{Colors.BOLD_PURPLE}Running System Doctor…{Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_PURPLE}:: 正在诊断系统…{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_PURPLE}:: Running diagnostics…{Colors.RESET}",
     },
     "doctor_ok": {
         "zh": f"{Colors.BOLD_GREEN}[✓]{Colors.RESET} {{0}}",
@@ -992,8 +1122,8 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": f"\n{Colors.BOLD_GREEN}[✓] Diagnostics complete{Colors.RESET}",
     },
     "reboot_hint": {
-        "zh": f"{Colors.BOLD_CYAN}提示: 建议重启 Noctalia 或重新加载 Niri 以使配置生效{Colors.RESET}",
-        "en": f"{Colors.BOLD_CYAN}Hint: Restart Noctalia or reload Niri for settings to take effect{Colors.RESET}",
+        "zh": f"{Colors.BOLD_CYAN}建议重启 Noctalia 或重新加载 Niri 以使配置生效{Colors.RESET}",
+        "en": f"{Colors.BOLD_CYAN}Restart Noctalia or reload Niri for settings to take effect{Colors.RESET}",
     },
 
     # System Errors & Preflight
@@ -1034,50 +1164,54 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
 用法: {1} [命令] [参数]
 
 命令:
-  install [full|config]              全量安装，或只部署配置
-  update [--force|--no-deploy]       更新源码，并按需部署配置
+  install [full|config]              应用配置（full = 含壁纸、扩展、依赖）
+  update [--force|--no-deploy]       更新源码，并按需应用配置
+  preset <app> [list|apply|save|edit|delete] <name>  切换或管理预设
   snapshot [备注]                    创建配置快照
   snapshot delete [序号]             删除快照；无序号时可批量选择
   rollback [序号]                    恢复配置快照
-  list                               列出配置快照
+  list                               列出快照
   uninstall                          归档当前配置并卸载
-  purge                              删除配置、快照、缓存和壁纸
-  doctor                             检查桌面环境
+  purge                              清空配置、快照、缓存与壁纸
+  doctor                             诊断桌面环境
   deps [core|apps]                   管理依赖或常用软件
   apps                               打开常用软件菜单
-  wallpapers                         下载完整壁纸与视频包
+  wallpapers                         下载壁纸包
   theme [toggle|dark|light|sync|status]  切换或同步深浅主题
   bug | report                       导出诊断报告
-  test                               执行开发者沙箱部署测试
+  test                               开发者沙箱部署测试
   greeter [install|status|uninstall] 管理 Noctalia Greeter
   fcitx [install|status|uninstall]   管理 NyxMellow fcitx5 皮肤
   gtk [install|status|uninstall]     管理 GTK Material You 主题
+  fisher [install|status|uninstall]  管理 fisher 插件管理器
   help                               显示本帮助
-  无参数                             打开交互式控制面板""",
+  无参数                             打开控制面板""",
         "en": """{0} dotfiles manager ({1})
 Usage: {1} [command] [args]
 
 Commands:
-  install [full|config]              Full setup, or configs only
-  update [--force|--no-deploy]       Update source, optionally deploy configs
+  install [full|config]              Apply configs (full = wallpapers, extensions, deps)
+  update [--force|--no-deploy]       Update source, optionally apply configs
+  preset <app> [list|apply|save|edit|delete] <name>  Switch or manage presets
   snapshot [note]                    Create a config snapshot
   snapshot delete [index]            Delete snapshots; multi-select without index
   rollback [index]                   Restore a config snapshot
-  list                               List config snapshots
+  list                               List snapshots
   uninstall                          Archive current configs and uninstall
-  purge                              Remove configs, snapshots, cache, and wallpapers
-  doctor                             Check the desktop environment
+  purge                              Clear configs, snapshots, cache, and wallpapers
+  doctor                             Diagnose the desktop environment
   deps [core|apps]                   Manage dependencies or recommended apps
   apps                               Open the recommended apps menu
-  wallpapers                         Download the full wallpaper and video pack
+  wallpapers                         Download the wallpaper pack
   theme [toggle|dark|light|sync|status]  Switch or sync light/dark theme
   bug | report                       Export a diagnostic report
   test                               Run the developer sandbox deploy
   greeter [install|status|uninstall] Manage Noctalia Greeter
   fcitx [install|status|uninstall]   Manage the NyxMellow fcitx5 skin
   gtk [install|status|uninstall]     Manage the GTK Material You theme
+  fisher [install|status|uninstall]  Manage the fisher plugin manager
   help                               Show this help
-  no arguments                       Open the interactive control panel""",
+  no arguments                       Open the control panel""",
     },
     "preflight_express_summary": {
         "zh": f"\n{Colors.BOLD_BLUE}:: 即将执行以下更改:{Colors.RESET}",
@@ -1088,19 +1222,19 @@ Commands:
         "en": f"  {Colors.BOLD_CYAN}- Configs:{Colors.RESET} {{0}} item(s)",
     },
     "preflight_comp_assets": {
-        "zh": f"  {Colors.BOLD_CYAN}- 下载:{Colors.RESET} 完整壁纸与视频包",
-        "en": f"  {Colors.BOLD_CYAN}- Download:{Colors.RESET} Full wallpaper and video pack",
+        "zh": f"  {Colors.BOLD_CYAN}- 下载:{Colors.RESET} 壁纸包",
+        "en": f"  {Colors.BOLD_CYAN}- Download:{Colors.RESET} wallpaper pack",
     },
     "preflight_comp_module_fcitx": {
-        "zh": f"  {Colors.BOLD_CYAN}- 可选模块:{Colors.RESET} {{0}} fcitx5 皮肤",
-        "en": f"  {Colors.BOLD_CYAN}- Optional Module:{Colors.RESET} {{0}} fcitx5 Skin",
+        "zh": f"  {Colors.BOLD_CYAN}- 扩展:{Colors.RESET} {{0}} fcitx5 皮肤",
+        "en": f"  {Colors.BOLD_CYAN}- Extension:{Colors.RESET} {{0}} fcitx5 skin",
     },
     "preflight_comp_module_greeter": {
-        "zh": f"  {Colors.BOLD_CYAN}- 可选模块:{Colors.RESET} {{0}}",
-        "en": f"  {Colors.BOLD_CYAN}- Optional Module:{Colors.RESET} {{0}}",
+        "zh": f"  {Colors.BOLD_CYAN}- 扩展:{Colors.RESET} {{0}}",
+        "en": f"  {Colors.BOLD_CYAN}- Extension:{Colors.RESET} {{0}}",
     },
     "preflight_comp_deps": {
-        "zh": f"  {Colors.BOLD_CYAN}- 系统依赖:{Colors.RESET} 检查并安装缺失项",
+        "zh": f"  {Colors.BOLD_CYAN}- 依赖:{Colors.RESET} 检查并安装缺失项",
         "en": f"  {Colors.BOLD_CYAN}- Dependencies:{Colors.RESET} Check and install missing packages",
     },
     "preflight_comp_backup": {
@@ -1108,12 +1242,12 @@ Commands:
         "en": f"  {Colors.BOLD_CYAN}- Snapshot:{Colors.RESET} Save current configs before writing",
     },
     "preflight_custom_config_kept": {
-        "zh": f"{Colors.BOLD_CYAN}[ 保留的自定义配置清单 ]{Colors.RESET}",
-        "en": f"{Colors.BOLD_CYAN}[ Preserved custom configurations ]{Colors.RESET}",
+        "zh": f"{Colors.BOLD_CYAN}[ 保留的自定义配置 ]{Colors.RESET}",
+        "en": f"{Colors.BOLD_CYAN}[ Preserved custom configs ]{Colors.RESET}",
     },
     "preflight_sudo_prompt": {
-        "zh": f"\n{Colors.BOLD_BLUE}:: 所选操作需要管理员权限，请验证一次 sudo：{Colors.RESET}",
-        "en": f"\n{Colors.BOLD_BLUE}:: Selected steps need administrator access. Authenticate sudo once:{Colors.RESET}",
+        "zh": f"\n{Colors.BOLD_BLUE}:: 以下步骤需要 sudo，验证一次：{Colors.RESET}",
+        "en": f"\n{Colors.BOLD_BLUE}:: These steps need sudo. Authenticate once:{Colors.RESET}",
     },
 
     # Network
@@ -1170,7 +1304,7 @@ Commands:
         "en": f"{Colors.BOLD_RED}[✗] All mirror nodes failed{Colors.RESET}\n",
     },
 
-    # Logging & Atomic Deployment
+    # Logging & Atomic Install
     "log_keep_custom_file": {
         "zh": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} 保留自定义文件: ~/.config/{{0}}",
         "en": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} Preserved custom file: ~/.config/{{0}}",
@@ -1179,13 +1313,13 @@ Commands:
         "zh": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} 保留自定义目录: ~/.config/{{0}}",
         "en": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} Preserved custom dir: ~/.config/{{0}}",
     },
-    "log_keep_monitor_config": {
-        "zh": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} 保留显示器配置: ~/.config/{{0}}/{{1}}",
-        "en": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} Preserved monitor config: ~/.config/{{0}}/{{1}}",
+    "log_keep_preserved_file": {
+        "zh": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} 保留受保护文件: ~/.config/{{0}}/{{1}}",
+        "en": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} Preserved file: ~/.config/{{0}}/{{1}}",
     },
     "log_deploy_config_item": {
-        "zh": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} 部署配置: ~/.config/{{0}}",
-        "en": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} Deployed config: ~/.config/{{0}}",
+        "zh": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} 安装配置: ~/.config/{{0}}",
+        "en": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} Installed config: ~/.config/{{0}}",
     },
     "log_nvidia_gpu_detected": {
         "zh": ":: 检测到 NVIDIA 显卡，已启用相应环境变量",
@@ -1377,19 +1511,125 @@ Commands:
         "zh": f"\n{Colors.BOLD_YELLOW}[!] 本地仓库 ({{0}}) 有未提交的改动或分支偏离。{Colors.RESET}\n{Colors.BOLD_CYAN}已跳过更新，源码和现有配置均未改动。{Colors.RESET}\n",
         "en": f"\n{Colors.BOLD_YELLOW}[!] Local repo ({{0}}) has uncommitted changes or has diverged.{Colors.RESET}\n{Colors.BOLD_CYAN}Update skipped; source and installed configs were left unchanged.{Colors.RESET}\n",
     },
+    "update_use_pacman": {
+        "zh": f"\n{Colors.BOLD_CYAN}系统包由 pacman 管理，已跳过 git pull。更新请运行: sudo pacman -Syu nyxniri-git{Colors.RESET}\n",
+        "en": f"\n{Colors.BOLD_CYAN}System package is managed by pacman; git pull skipped. Run: sudo pacman -Syu nyxniri-git{Colors.RESET}\n",
+    },
+    "path_occlusion_warn": {
+        "zh": f"{Colors.BOLD_YELLOW}[!] 检测到 ~/.local/bin/nyxniri 遮蔽了系统包 (/usr/bin/nyxniri)。建议删除旧软链以使用系统包: rm ~/.local/bin/nyxniri{Colors.RESET}",
+        "en": f"{Colors.BOLD_YELLOW}[!] ~/.local/bin/nyxniri is shadowing the system package (/usr/bin/nyxniri). Remove the stale link to use the package: rm ~/.local/bin/nyxniri{Colors.RESET}",
+    },
+
+    # Presets
+    "preset_list_title": {
+        "zh": f"\n  {Colors.BOLD_CYAN}── {Colors.RESET}{{0}} 预设{Colors.BOLD_CYAN} ──{Colors.RESET}  ({Colors.DIM}* = 当前活动{Colors.RESET})\n",
+        "en": f"\n  {Colors.BOLD_CYAN}── {Colors.RESET}{{0}} presets{Colors.BOLD_CYAN} ──{Colors.RESET}  ({Colors.DIM}* = active{Colors.RESET})\n",
+    },
+    "preset_src_official": {
+        "zh": "官方",
+        "en": "official",
+    },
+    "preset_src_user": {
+        "zh": "用户",
+        "en": "user",
+    },
+    "preset_applied": {
+        "zh": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} 已切换 {{0}} 预设: {{1}}",
+        "en": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} Switched {{0}} to preset: {{1}}",
+    },
+    "preset_apply_failed": {
+        "zh": f"  {Colors.BOLD_RED}[✗]{Colors.RESET} 切换 {{0}} 预设 {{1}} 失败",
+        "en": f"  {Colors.BOLD_RED}[✗]{Colors.RESET} Failed to apply preset '{{1}}' to {{0}}",
+    },
+    "preset_not_found": {
+        "zh": f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} {{0}} 没有名为 '{{1}}' 的预设",
+        "en": f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} No preset '{{1}}' for {{0}}",
+    },
+    "preset_name_reserved": {
+        "zh": f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} 预设名 '{{0}}' 是保留字（apply default = 回默认）",
+        "en": f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} Preset name '{{0}}' is reserved (apply default = reset)",
+    },
+    "preset_official_name_collision": {
+        "zh": f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} 预设名 '{{0}}' 与官方预设重名，请改名",
+        "en": f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} Preset name '{{0}}' collides with an official preset; rename it",
+    },
+    "preset_nothing_to_save": {
+        "zh": f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} {{0}} 尚无配置，无可保存",
+        "en": f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} No {{0}} config to save yet",
+    },
+    "preset_saved": {
+        "zh": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} 已保存 {{0}} 用户预设: {{1}}",
+        "en": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} Saved {{0}} user preset: {{1}}",
+    },
+    "preset_delete_official_denied": {
+        "zh": f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} 预设 '{{0}}' 是官方预设，无法删除",
+        "en": f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} Preset '{{0}}' is official, cannot be deleted",
+    },
+    "preset_deleted": {
+        "zh": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} 已删除 {{0}} 用户预设: {{1}}",
+        "en": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} Deleted {{0}} user preset: {{1}}",
+    },
+    "preset_edit_official_denied": {
+        "zh": f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} '{{0}}' 是官方预设，不能编辑（先 save 成用户预设再改）",
+        "en": f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} '{{0}}' is an official preset, can't edit (save a copy first)",
+    },
+    "preset_edit_notty": {
+        "zh": f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} 非交互终端，无法打开编辑器。预设目录: {{0}}",
+        "en": f"  {Colors.BOLD_YELLOW}[!]{Colors.RESET} Non-interactive terminal, can't open editor. Preset dir: {{0}}",
+    },
+    "preset_edit_opened": {
+        "zh": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} 已在编辑器打开 {{0}} 预设 {{1}}\n  {Colors.DIM}改完重新 `nyxniri preset {{0}} apply {{1}}` 即生效{Colors.RESET}",
+        "en": f"  {Colors.BOLD_GREEN}[✓]{Colors.RESET} Opened {{0}} preset {{1}} in editor\n  {Colors.DIM}Re-run `nyxniri preset {{0}} apply {{1}}` to apply edits{Colors.RESET}",
+    },
+    "preset_warn_upstream_removed": {
+        "zh": f"{Colors.BOLD_YELLOW}[!] {{0}}: 原预设 '{{1}}' 已被上游移除，已回退默认配置{Colors.RESET}",
+        "en": f"{Colors.BOLD_YELLOW}[!] {{0}}: preset '{{1}}' was removed upstream, fell back to defaults{Colors.RESET}",
+    },
+    "preset_warn_frozen": {
+        "zh": f"{Colors.BOLD_YELLOW}[!] {{0}}: 活动预设 '{{1}}' 已不在仓库中，当前 ~/.config/{{0}} 内容保持冻结，未重新部署{Colors.RESET}\n    {Colors.BOLD_CYAN}运行 `{Colors.RESET}nyxniri preset {{0}} list{Colors.BOLD_CYAN}` 选新预设{Colors.RESET}",
+        "en": f"{Colors.BOLD_YELLOW}[!] {{0}}: active preset '{{1}}' is no longer in the repo; ~/.config/{{0}} is frozen, not redeployed{Colors.RESET}\n    {Colors.BOLD_CYAN}Run `{Colors.RESET}nyxniri preset {{0}} list{Colors.BOLD_CYAN}` to pick a new preset{Colors.RESET}",
+    },
+    "preset_switcher_title": {
+        "zh": f"\n  {Colors.BOLD_CYAN}── 预设切换 ──{Colors.RESET}\n",
+        "en": f"\n  {Colors.BOLD_CYAN}── Preset Switcher ──{Colors.RESET}\n",
+    },
+    "preset_switcher_hint": {
+        "zh": f"  {Colors.DARK_GRAY}←/→ 跳栏  ↑/↓ 栏内移动  Enter 应用  q 退{Colors.RESET}",
+        "en": f"  {Colors.DARK_GRAY}←/→ switch pane  ↑/↓ move  Enter apply  q back{Colors.RESET}",
+    },
+    "preset_switcher_hint_short": {
+        "zh": f"  {Colors.DARK_GRAY}←/→ 栏  ↑/↓ 移  Enter 应用  q 退{Colors.RESET}",
+        "en": f"  {Colors.DARK_GRAY}←/→ pane  ↑/↓ move  Enter apply  q{Colors.RESET}",
+    },
+    "preset_switcher_col_app": {
+        "zh": "应用",
+        "en": "App",
+    },
+    "preset_switcher_col_preset": {
+        "zh": "预设 ({{0}})",
+        "en": "Presets ({{0}})",
+    },
 }
 
+_MSG_CACHE: Dict[str, str] = {}
+
 def msg(key: str, *args: Any) -> str:
-    """Retrieve translated message with automatic fallback to English and string formatting."""
+    if not args:
+        cached = _MSG_CACHE.get(key)
+        if cached is not None:
+            return cached
     lang = get_lang()
     entry = TRANSLATIONS.get(key)
     if not entry:
-        return key if not args else f"{key} ({', '.join(str(a) for a in args)})"
-
+        result = key if not args else f"{key} ({', '.join(str(a) for a in args)})"
+        if not args:
+            _MSG_CACHE[key] = result
+        return result
     template = entry.get(lang) or entry.get("en") or key
     if args:
         try:
             return template.format(*args)
         except Exception:
             return template
+    _MSG_CACHE[key] = template
     return template

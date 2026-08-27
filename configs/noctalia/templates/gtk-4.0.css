@@ -106,6 +106,23 @@
 @define-color BLACK_700                  #33302F;
 @define-color BLACK_900                  #2B2928;
 
+/* --- windowcontrols 图标内圆去除（模式无关） ---
+ * GtkButton 在子部件是图标时自动加 .image-button（gtkbutton.c:
+ * update_style_classes_from_child_type），GtkWindowControls 的
+ * minimize/maximize/close 按钮塞了 GtkImage、不带 .flat → 自动获得 .image-button。
+ * 于是我们的 .image-button 规则给按钮 secondary_container 底色 + 100% 圆角
+ * = 大圆（这是要保留的 M3 image-button 外观）；但 libadwaita 又给
+ * windowcontrols > button > image 加了 background-color + border-radius:100%
+ * = 图标内的小圆 → 大圆套小圆 = 同心圆。这里只清掉 image 的内圆（底色 +
+ * 圆角），保留按钮大圆，让窗口按钮和其它 image-button 一致。user CSS
+ * (USER=800) 压过 libadwaita (THEME)，一条 base 规则即覆盖其 :hover/:active
+ * 内圆；不动 image 的 padding（libadwaita 的 4px），图标仍在圆心。
+ */
+windowcontrols > button > image {
+    background: none;
+    border-radius: 0;
+}
+
 /* ============================================================ */
 /*  Dark mode — M3 配色 + widget 规则                            */
 /* ============================================================ */

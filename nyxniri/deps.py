@@ -9,9 +9,10 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from nyxniri.constants import AUR_DEPS, CORE_DEPS, OPTIONAL_APPS
+from nyxniri.constants import AUR_DEPS, CORE_DEPS
 from nyxniri.core import log_msg, register_temp_path
 from nyxniri.i18n import msg
+from nyxniri.deploy.manifest import discover_manifest_apps, discover_optional_apps
 from nyxniri.network import git_clone_timeout
 from nyxniri.tui import CheckboxEntry, CheckboxList, pad_display, prompt_confirm
 
@@ -250,24 +251,18 @@ def run_dep_menu_loop() -> None:
         print(msg("installing_selected"))
         install_selected_deps(chosen)
 
-_OPT_APP_PKG_MAP = {
-    "nautilus": {"repo": ["nautilus"], "aur": []},
-    "missioncenter": {"repo": ["mission-center"], "aur": []},
-    "fcitx5-rime": {"repo": ["fcitx5", "fcitx5-gtk", "fcitx5-qt", "fcitx5-configtool", "fcitx5-rime"], "aur": ["rime-ice-git"]},
-}
-
-
 def install_optional_apps(selected_apps: List[str]) -> None:
-    """Install selected optional apps with correct package name mapping."""
+    """Install selected optional apps using per-app manifest package mapping."""
+    manifests = dict(discover_manifest_apps())
     repo_pkgs: List[str] = []
     aur_pkgs: List[str] = []
     has_fcitx = False
     for app in selected_apps:
-        mapping = _OPT_APP_PKG_MAP.get(app)
-        if not mapping:
+        manifest = manifests.get(app)
+        if manifest is None:
             continue
-        repo_pkgs.extend(mapping["repo"])
-        aur_pkgs.extend(mapping["aur"])
+        repo_pkgs.extend(manifest.packages_repo)
+        aur_pkgs.extend(manifest.packages_aur)
         if app == "fcitx5-rime":
             has_fcitx = True
 
@@ -290,7 +285,7 @@ def install_optional_apps(selected_apps: List[str]) -> None:
 
     if has_fcitx and shutil.which("fcitx5"):
         try:
-            from nyxniri.fcitx import fcitx_install
+            from nyxniri.modules.fcitx import fcitx_install
             fcitx_install()
         except Exception:
             pass
@@ -304,9 +299,13 @@ def run_optional_apps_menu_loop() -> None:
         print(msg("interactive_terminal_required"), file=sys.stderr)
         return
 
+    manifests = dict(discover_manifest_apps())
     entries = []
-    for app in OPTIONAL_APPS:
-        is_inst = is_dep_installed(app)
+    for app in discover_optional_apps():
+        manifest = manifests.get(app)
+        if manifest is None:
+            continue
+        is_inst = is_dep_installed(manifest.detect)
         status_tag = msg("installed") if is_inst else msg("missing")
         app_label = msg(f"app_{app.replace('-', '_')}")
         label = f"{pad_display(app_label, 32)} {status_tag}"

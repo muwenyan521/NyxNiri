@@ -13,15 +13,12 @@ from nyxniri.constants import (
     GREETER_PKG,
     GREETER_POLKIT_RULE,
     GREETER_SESSION_BIN,
+    GREETER_STATE_DIR,
     MAIN_WM,
     THEME_ENGINE,
 )
 from nyxniri.core import log_msg
-from nyxniri.i18n import get_lang, msg
-
-
-def _text(zh: str, en: str) -> str:
-    return zh if get_lang() == "zh" else en
+from nyxniri.i18n import msg, text
 
 CONFLICT_DMS = ["sddm", "lightdm", "gdm", "ly"]
 
@@ -128,9 +125,9 @@ def greeter_install() -> bool:
         print(msg("greeter_config_failed", str(GREETER_ETC_CFG)))
 
     state_cmd = (
-        f"mkdir -p /var/lib/{GREETER_PKG} && "
-        f"(chown -R greeter:greeter /var/lib/{GREETER_PKG} 2>/dev/null || true) && "
-        f"chmod 755 /var/lib/{GREETER_PKG}"
+        f"mkdir -p {GREETER_STATE_DIR} && "
+        f"(chown -R greeter:greeter {GREETER_STATE_DIR} 2>/dev/null || true) && "
+        f"chmod 755 {GREETER_STATE_DIR}"
     )
     res_s = subprocess.run(["sudo", "sh", "-c", state_cmd], check=False)
     if res_s.returncode == 0:
@@ -167,31 +164,31 @@ def greeter_status() -> None:
     """Print detailed status of Noctalia Greeter."""
     print(msg("greeter_status_title"))
     if greeter_installed():
-        print(msg("doctor_ok", _text(f"{GREETER_PKG}: 已安装", f"{GREETER_PKG}: installed")))
+        print(msg("doctor_ok", text(f"{GREETER_PKG}: 已安装", f"{GREETER_PKG}: installed")))
     else:
-        print(msg("doctor_warn", _text(f"{GREETER_PKG}: 未安装", f"{GREETER_PKG}: not installed")))
+        print(msg("doctor_warn", text(f"{GREETER_PKG}: 未安装", f"{GREETER_PKG}: not installed")))
 
     if GREETER_ETC_CFG.is_file():
         try:
             content = GREETER_ETC_CFG.read_text(encoding="utf-8", errors="ignore")
             if GREETER_SESSION_BIN in content:
-                print(msg("doctor_ok", _text(f"greetd 配置: 已使用 {GREETER_PKG}", f"greetd config: using {GREETER_PKG}")))
+                print(msg("doctor_ok", text(f"greetd 配置: 已使用 {GREETER_PKG}", f"greetd config: using {GREETER_PKG}")))
             else:
-                print(msg("doctor_warn", _text(
+                print(msg("doctor_warn", text(
                     f"greetd 配置存在，但未使用 {GREETER_PKG}",
                     f"greetd config exists but does not use {GREETER_PKG}",
                 )))
         except Exception:
             pass
     else:
-        print(msg("doctor_warn", _text(f"greetd 配置缺失: {GREETER_ETC_CFG}", f"greetd config is missing: {GREETER_ETC_CFG}")))
+        print(msg("doctor_warn", text(f"greetd 配置缺失: {GREETER_ETC_CFG}", f"greetd config is missing: {GREETER_ETC_CFG}")))
 
     if shutil.which("systemctl"):
         res = subprocess.run(["systemctl", "is-enabled", "greetd"], capture_output=True, check=False)
         if res.returncode == 0:
-            print(msg("doctor_ok", _text("greetd 服务: 已启用", "greetd service: enabled")))
+            print(msg("doctor_ok", text("greetd 服务: 已启用", "greetd service: enabled")))
         else:
-            print(msg("doctor_warn", _text("greetd 服务: 未启用", "greetd service: disabled")))
+            print(msg("doctor_warn", text("greetd 服务: 未启用", "greetd service: disabled")))
 
 def greeter_uninstall() -> bool:
     """Uninstall Noctalia Greeter configuration and restore backups."""
@@ -208,6 +205,10 @@ def greeter_uninstall() -> bool:
     if GREETER_POLKIT_RULE.is_file():
         subprocess.run(["sudo", "rm", "-f", str(GREETER_POLKIT_RULE)], check=False)
         print(msg("greeter_uninstall_polkit"))
+
+    # Remove the greeter's state directory (created at install; previously leaked)
+    subprocess.run(["sudo", "rm", "-rf", str(GREETER_STATE_DIR)], check=False)
+    print(msg("greeter_uninstall_state_dir", str(GREETER_STATE_DIR)))
 
     print(msg("greeter_uninstall_done"))
     log_msg("INFO", "Uninstalled Noctalia Greeter configuration")

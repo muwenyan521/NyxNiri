@@ -1,0 +1,7 @@
+# starship prompt manifest — file-type app sidecar (configs/starship.toml)
+# "starship.toml" is the file name; the actual package/binary is "starship".
+[packages]
+repo = ["starship"]
+
+detect = "starship"
+label = "Starship"

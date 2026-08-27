@@ -7,12 +7,12 @@ from pathlib import Path
 PROJECT_NAME = "NyxNiri"
 CLI_CMD = "nyxniri"
 MAIN_WM = "niri"
-MAIN_WM_HARDWARE_CONFIG = "monitor.kdl"
 THEME_ENGINE = "noctalia"
 GREETER_PKG = "noctalia-greeter"
 GREETER_SESSION_BIN = "noctalia-greeter-session"
 GREETER_ETC_CFG = Path("/etc/greetd/config.toml")
 GREETER_POLKIT_RULE = Path(f"/etc/polkit-1/rules.d/50-{GREETER_PKG}.rules")
+GREETER_STATE_DIR = Path("/var/lib") / GREETER_PKG
 FCITX_THEME = "nyxmellow"
 
 # --- Directory Constants ---
@@ -63,20 +63,6 @@ CORE_DEPS = [
 
 AUR_DEPS = [
     "mpvpaper",
-]
-
-OPTIONAL_APPS = [
-    "nautilus",
-    "missioncenter",
-    "fcitx5-rime",
-    "yazi",
-    "btop",
-    "duf",
-    "bat",
-    "procs",
-    "dust",
-    "git-delta",
-    "vivid",
 ]
 
 # --- ANSI Styling Palette (NyxNiri Native) ---

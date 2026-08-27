@@ -43,6 +43,14 @@ class TempEnv:
 
         # Reset cached Environment so next get_env() picks up new HOME
         core._ENV = None
+        # Reset module-level caches that leak across tests (isolation, §9).
+        # _PICS_DIR_CACHE especially: get_pics_dir() otherwise returns a path
+        # from a previously-deleted temp HOME, breaking wallpaper assertions.
+        core._PICS_DIR_CACHE = None
+        import nyxniri.deploy.deploy as _deploy_core
+        import nyxniri.deploy.hardware as _deploy_hw
+        _deploy_core._CONFIG_ITEMS_CACHE = []
+        _deploy_hw._IS_NVIDIA = None
 
         # Build the Environment with temp HOME, then force repo mode
         env = core.get_env()

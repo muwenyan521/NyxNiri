@@ -6,13 +6,9 @@ from pathlib import Path
 
 from nyxniri.constants import Colors, THEME_ENGINE
 from nyxniri.core import get_env, log_msg
-from nyxniri.i18n import get_lang, msg
+from nyxniri.i18n import msg, text
 
 GTK_TEMPLATE_KEYS = ("nyxniri_gtk3", "nyxniri_gtk4")
-
-
-def _text(zh: str, en: str) -> str:
-    return zh if get_lang() == "zh" else en
 
 
 def _paths():
@@ -38,6 +34,11 @@ def gtktheme_registered() -> bool:
         return all(f"theme.templates.user.{key}" in content for key in GTK_TEMPLATE_KEYS)
     except Exception:
         return False
+
+
+def gtktheme_status_label() -> str:
+    """Return compact status label for menus."""
+    return msg("status_enabled") if gtktheme_registered() else msg("status_not_installed")
 
 
 def gtktheme_rendered() -> bool:
@@ -104,12 +105,12 @@ def gtktheme_status() -> None:
     print(msg("gtk_status_title"))
 
     if gtktheme_registered():
-        print(msg("doctor_ok", _text(
+        print(msg("doctor_ok", text(
             f"模板注册: 已注册 ({noctalia_conf})",
             f"Templates: registered ({noctalia_conf})",
         )))
     else:
-        print(msg("doctor_warn", _text(
+        print(msg("doctor_warn", text(
             f"模板注册: 未注册 ({noctalia_conf})",
             f"Templates: not registered ({noctalia_conf})",
         )))
@@ -119,19 +120,19 @@ def gtktheme_status() -> None:
             try:
                 content = css.read_text(encoding="utf-8", errors="ignore")
                 if "@define-color accent_bg_color" in content:
-                    print(msg("doctor_ok", _text(
+                    print(msg("doctor_ok", text(
                         f"{label}: 已渲染并跟随壁纸 ({css})",
                         f"{label}: rendered, following wallpaper ({css})",
                     )))
                 else:
-                    print(msg("doctor_warn", _text(
+                    print(msg("doctor_warn", text(
                         f"{label}: 文件存在但缺少 M3 色彩定义 ({css})",
                         f"{label}: file exists but missing M3 color definitions ({css})",
                     )))
             except Exception:
-                print(msg("doctor_warn", _text(f"{label}: 读取失败", f"{label}: read error")))
+                print(msg("doctor_warn", text(f"{label}: 读取失败", f"{label}: read error")))
         else:
-            print(msg("doctor_warn", _text(
+            print(msg("doctor_warn", text(
                 f"{label}: 未渲染，运行 nyxniri gtk install 触发",
                 f"{label}: not rendered, run nyxniri gtk install",
             )))

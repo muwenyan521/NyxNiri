@@ -14,6 +14,7 @@ from nyxniri.constants import (
 )
 from nyxniri.core import (
     acquire_lock,
+    check_path_occlusion,
     ensure_nyxniri_symlink,
     get_env,
     init_logger,
@@ -24,6 +25,8 @@ from nyxniri.deploy import (
     deploy_selected_configs,
     deploy_wallpapers,
     discover_config_items,
+    discover_manifest_apps,
+    discover_optional_apps,
     render_completion_screen,
     test_deploy,
     wallpapers_pack_present,
@@ -31,11 +34,12 @@ from nyxniri.deploy import (
 from nyxniri.deps import (
     get_missing_deps,
     install_selected_deps,
+    is_dep_installed,
     run_dep_menu_loop,
     run_optional_apps_menu_loop,
 )
 from nyxniri.doctor import generate_bug_report, run_doctor
-from nyxniri.fcitx import (
+from nyxniri.modules.fcitx import (
     fcitx_enabled,
     fcitx_install,
     fcitx_status,
@@ -43,13 +47,23 @@ from nyxniri.fcitx import (
     fcitx_uninstall,
     fcitx5_installed,
 )
-from nyxniri.greeter import (
+from nyxniri.modules.greeter import (
     greeter_install,
     greeter_status,
     greeter_status_label,
     greeter_uninstall,
 )
-from nyxniri.backup import (
+from nyxniri.modules import (
+    fisher_install,
+    fisher_status,
+    fisher_status_label,
+    fisher_uninstall,
+    gtktheme_install,
+    gtktheme_status,
+    gtktheme_status_label,
+    gtktheme_uninstall,
+)
+from nyxniri.state import (
     backup_configs,
     delete_backup,
     list_backups,
@@ -58,11 +72,14 @@ from nyxniri.backup import (
 )
 from nyxniri.i18n import msg
 from nyxniri.network import safe_git_pull
+from nyxniri.deploy import apply_preset, collect_presets, delete_preset, edit_preset, list_presets, save_preset
 from nyxniri.tui import (
     CheckboxEntry,
     CheckboxList,
     MenuItem,
     Menu,
+    PresetSwitcher,
+    drain_stdin,
     pad_display,
     press_any_key,
     prompt_confirm,
@@ -75,9 +92,23 @@ def run_master_component_menu(is_update: bool = False, mode: str = "full") -> Op
     items = discover_config_items()
     entries: List[CheckboxEntry] = []
 
-    # 1. Configs
+    # 1. Configs — optional apps (listed in .optional-apps.toml) show install
+    #    status, so the user sees whether deploying this config is useful now.
+    #    An optional app whose package is missing defaults UNCHECKED — don't
+    #    litter ~/.config with config for an absent app. §6 / §8.4 path-display.
+    optional_set = set(discover_optional_apps())
+    manifests = dict(discover_manifest_apps())
     for item in items:
-        entries.append(CheckboxEntry(key=f"config_{item}", label=msg("master_item_config", item), checked=True))
+        label = msg("master_item_config", item)
+        checked = True
+        if item in optional_set:
+            m = manifests.get(item)
+            if m is not None:
+                is_inst = is_dep_installed(m.detect)
+                label = f"{label}  {msg('installed') if is_inst else msg('missing')}"
+                if not is_inst:
+                    checked = False
+        entries.append(CheckboxEntry(key=f"config_{item}", label=label, checked=checked))
 
     if mode == "full" or is_update:
         # 2. Heavy assets (wallpapers)
@@ -368,6 +399,7 @@ def snapshot_menu_loop() -> None:
         if choice == 0:
             sys.stdout.write(msg("snapshot_note_prompt"))
             sys.stdout.flush()
+            drain_stdin()
             note = sys.stdin.readline().strip()
             backup_configs(note=note, interactive=True)
             press_any_key()
@@ -415,6 +447,38 @@ def fcitx_menu_loop() -> None:
         elif choice == 2: fcitx_uninstall(); press_any_key()
         elif choice == 3: break
 
+def gtk_menu_loop() -> None:
+    """GTK Material You theme interactive submenu."""
+    while True:
+        items = [
+            MenuItem(label=msg("gtk_sub_install")),
+            MenuItem(label=msg("gtk_sub_status")),
+            MenuItem(label=msg("gtk_sub_uninstall"), style="warn"),
+            MenuItem(label=msg("gtk_sub_back"), style="subtle"),
+        ]
+        menu = Menu("gtk_menu_title", items, hint_key="submenu_hint")
+        choice = menu.run()
+        if choice == 0: gtktheme_install(); press_any_key()
+        elif choice == 1: gtktheme_status(); press_any_key()
+        elif choice == 2: gtktheme_uninstall(); press_any_key()
+        elif choice == 3: break
+
+def fisher_menu_loop() -> None:
+    """fisher plugin manager interactive submenu."""
+    while True:
+        items = [
+            MenuItem(label=msg("fisher_sub_install")),
+            MenuItem(label=msg("fisher_sub_status")),
+            MenuItem(label=msg("fisher_sub_uninstall"), style="warn"),
+            MenuItem(label=msg("fisher_sub_back"), style="subtle"),
+        ]
+        menu = Menu("fisher_menu_title", items, hint_key="submenu_hint")
+        choice = menu.run()
+        if choice == 0: fisher_install(); press_any_key()
+        elif choice == 1: fisher_status(); press_any_key()
+        elif choice == 2: fisher_uninstall(); press_any_key()
+        elif choice == 3: break
+
 def deps_menu_loop() -> None:
     """Dependencies & Recommended apps submenu."""
     if not sys.stdin.isatty():
@@ -433,44 +497,65 @@ def deps_menu_loop() -> None:
         elif choice == 1: run_optional_apps_menu_loop(); press_any_key()
         elif choice == 2: break
 
-def optional_modules_menu_loop() -> None:
-    """Optional modules interactive submenu."""
+def extensions_menu_loop() -> None:
+    """Extensions interactive submenu: greeter / fcitx / gtk / fisher."""
     while True:
-        label0 = pad_display(msg("optmod_sub_apps"), 26)
-        label1 = pad_display("Noctalia Greeter", 26) + greeter_status_label()
-        label2 = pad_display(msg("optmod_sub_fcitx"), 26) + fcitx_status_label()
-        label3 = pad_display(msg("optmod_sub_wallpapers"), 26) + (msg("status_wallpapers_installed") if wallpapers_pack_present() else msg("status_wallpapers_missing"))
+        label_greeter = pad_display(msg("ext_sub_greeter"), 26) + greeter_status_label()
+        label_fcitx = pad_display(msg("ext_sub_fcitx"), 26) + fcitx_status_label()
+        label_gtk = pad_display(msg("ext_sub_gtk"), 26) + gtktheme_status_label()
+        label_fisher = pad_display(msg("ext_sub_fisher"), 26) + fisher_status_label()
 
         items = [
-            MenuItem(label=label0),
-            MenuItem(label=label1),
-            MenuItem(label=label2),
-            MenuItem(label=label3),
-            MenuItem(label=msg("optmod_purge"), style="warn"),
-            MenuItem(label=msg("optmod_back"), style="subtle"),
+            MenuItem(label=label_greeter),
+            MenuItem(label=label_fcitx),
+            MenuItem(label=label_gtk),
+            MenuItem(label=label_fisher),
+            MenuItem(label=msg("ext_back"), style="subtle"),
         ]
-        menu = Menu("optmod_menu_title", items, hint_key="submenu_hint")
+        menu = Menu("ext_menu_title", items, hint_key="submenu_hint")
         choice = menu.run()
-        if choice == 0: run_optional_apps_menu_loop()
-        elif choice == 1: greeter_menu_loop()
-        elif choice == 2: fcitx_menu_loop()
-        elif choice == 3: deploy_wallpapers(do_download=True); press_any_key()
-        elif choice == 4: uninstall_nyxniri("purge"); press_any_key()
-        elif choice == 5: break
+        if choice == 0: greeter_menu_loop()
+        elif choice == 1: fcitx_menu_loop()
+        elif choice == 2: gtk_menu_loop()
+        elif choice == 3: fisher_menu_loop()
+        elif choice == 4: break
+
+def preset_switcher_loop() -> None:
+    """Interactive dual-pane preset switcher (§9). Left = apps, right = presets."""
+    if not sys.stdin.isatty():
+        print(msg("interactive_terminal_required"), file=sys.stderr)
+        return
+
+    apps = discover_config_items()
+
+    def presets_for(app: str):
+        return [(name, is_active) for name, _, is_active in collect_presets(app)]
+
+    chosen = PresetSwitcher(apps, presets_for).run()
+    if chosen:
+        app, name = chosen
+        apply_preset(app, name)
+        press_any_key()
 
 def main_menu_loop() -> None:
     """Main NyxNiri control panel interactive loop."""
     env = get_env()
     while True:
         items = [
+            # 部署
             MenuItem(label=msg("menu_opt1"), group_header=msg("menu_group_deploy")),
+            MenuItem(label=msg("menu_opt_preset")),
             MenuItem(label=msg("menu_opt2")),
+            # 管理
             MenuItem(label=msg("menu_opt3"), group_header=msg("menu_group_maint")),
             MenuItem(label=msg("menu_opt4")),
-            MenuItem(label=msg("menu_opt5")),
+            MenuItem(label=msg("menu_opt7"), style="warn"),
+            # 诊断
+            MenuItem(label=msg("menu_opt5"), group_header=msg("menu_group_system")),
             MenuItem(label=msg("menu_opt6")),
-            MenuItem(label=msg("menu_opt7"), group_header=msg("menu_group_system"), style="warn"),
+            # 扩展
             MenuItem(label=msg("menu_opt8")),
+            # 退出
             MenuItem(label=msg("menu_opt0"), style="subtle"),
         ]
         menu = Menu("menu_title", items, hint_key="menu_hint")
@@ -479,10 +564,12 @@ def main_menu_loop() -> None:
         if choice == 0:
             install_configs_workflow("full")
         elif choice == 1:
-            deps_menu_loop()
+            preset_switcher_loop()
         elif choice == 2:
-            snapshot_menu_loop()
+            deps_menu_loop()
         elif choice == 3:
+            snapshot_menu_loop()
+        elif choice == 4:
             update_result = safe_git_pull(env.repo_dir)
             if update_result is True:
                 offer_overwrite_upgrade()
@@ -494,18 +581,18 @@ def main_menu_loop() -> None:
             elif update_result is False:
                 print(msg("updating_failed"), file=sys.stderr)
             press_any_key()
-        elif choice == 4:
-            run_doctor()
-            press_any_key()
         elif choice == 5:
-            generate_bug_report()
-            press_any_key()
-        elif choice == 6:
             uninstall_nyxniri("")
             press_any_key()
+        elif choice == 6:
+            run_doctor()
+            press_any_key()
         elif choice == 7:
-            optional_modules_menu_loop()
+            generate_bug_report()
+            press_any_key()
         elif choice == 8:
+            extensions_menu_loop()
+        elif choice == 9:
             sys.exit(0)
 
 # --- CLI Dispatcher ---
@@ -555,8 +642,10 @@ def _cmd_list(sub_args: List[str]) -> int:
 
 def _cmd_uninstall(sub_args: List[str]) -> int:
     target = sub_args[0] if sub_args else ""
-    if len(sub_args) > 1 or target not in ("", "standard", "restore", "purge"):
-        exit_usage(f"{CLI_CMD} uninstall [standard|restore|purge]")
+    valid = ("", "standard", "restore", "purge", "--all", "all",
+             "--safe", "safe", "1", "--restore", "2", "--purge", "3")
+    if len(sub_args) > 1 or target not in valid:
+        exit_usage(f"{CLI_CMD} uninstall [--all|standard|restore|purge]")
     return 0 if uninstall_nyxniri(target) else 1
 
 def _cmd_purge(sub_args: List[str]) -> int:
@@ -605,6 +694,25 @@ def _cmd_test(sub_args: List[str]) -> int:
         exit_usage(f"{CLI_CMD} test")
     return 0 if test_deploy() else 1
 
+def _cmd_preset(sub_args: List[str]) -> int:
+    """nyxniri preset <app> [list|apply <name>|save <name>|edit <name>|delete <name>]"""
+    if len(sub_args) < 2:
+        exit_usage(f"{CLI_CMD} preset <app> [list|apply <name>|save <name>|edit <name>|delete <name>]")
+    app = sub_args[0]
+    action = sub_args[1]
+    name = sub_args[2] if len(sub_args) > 2 else ""
+    if action == "list":
+        if len(sub_args) > 2:
+            exit_usage(f"{CLI_CMD} preset {app} list")
+        list_presets(app)
+        return 0
+    if action in ("apply", "save", "edit", "delete"):
+        if not name or len(sub_args) > 3:
+            exit_usage(f"{CLI_CMD} preset {app} {action} <name>")
+        fn = {"apply": apply_preset, "save": save_preset, "edit": edit_preset, "delete": delete_preset}[action]
+        return 0 if fn(app, name) else 1
+    exit_usage(f"{CLI_CMD} preset {app} [list|apply <name>|save <name>|edit <name>|delete <name>]")
+
 def _module_handler(module_name: str, triad_name: str):
     """Factory: build a handler for install|status|uninstall triad (greeter/fcitx).
 
@@ -612,7 +720,7 @@ def _module_handler(module_name: str, triad_name: str):
     """
     def handler(sub_args: List[str]) -> int:
         import importlib
-        mod = importlib.import_module(f"nyxniri.{module_name}")
+        mod = importlib.import_module(f"nyxniri.modules.{module_name}")
         install_fn = getattr(mod, f"{module_name}_install")
         uninstall_fn = getattr(mod, f"{module_name}_uninstall")
         status_fn = getattr(mod, f"{module_name}_status")
@@ -652,6 +760,7 @@ def _cmd_update(sub_args: List[str]) -> int:
     if len(sub_args) > 1 or flag not in ("", "--force", "--deploy", "--no-deploy"):
         exit_usage(f"{CLI_CMD} update [--force|--no-deploy]")
     env = get_env()
+    check_path_occlusion()
     update_result = safe_git_pull(env.repo_dir)
     if update_result is True:
         deploy_ok = offer_overwrite_upgrade(flag)
@@ -678,8 +787,8 @@ COMMANDS = {
     "rollback":  (_cmd_rollback,  f"{CLI_CMD} rollback [index]"),
     "restore":   (_cmd_rollback,  f"{CLI_CMD} rollback [index]"),
     "list":      (_cmd_list,      f"{CLI_CMD} list"),
-    "uninstall": (_cmd_uninstall, f"{CLI_CMD} uninstall [standard|restore|purge]"),
-    "remove":    (_cmd_uninstall, f"{CLI_CMD} uninstall [standard|restore|purge]"),
+    "uninstall": (_cmd_uninstall, f"{CLI_CMD} uninstall [--all|standard|restore|purge]"),
+    "remove":    (_cmd_uninstall, f"{CLI_CMD} uninstall [--all|standard|restore|purge]"),
     "purge":     (_cmd_purge,     f"{CLI_CMD} purge"),
     "doctor":    (_cmd_doctor,    f"{CLI_CMD} doctor"),
     "deps":      (_cmd_deps,      f"{CLI_CMD} deps [core|apps]"),
@@ -690,12 +799,15 @@ COMMANDS = {
     "bug":       (_cmd_bug,       f"{CLI_CMD} bug"),
     "report":    (_cmd_bug,       f"{CLI_CMD} bug"),
     "test":      (_cmd_test,      f"{CLI_CMD} test"),
+    "preset":    (_cmd_preset,    f"{CLI_CMD} preset <app> [list|apply <name>|save <name>|edit <name>|delete <name>]"),
     "greeter":   (_module_handler("greeter", "greeter"),
                   f"{CLI_CMD} greeter [install|status|uninstall]"),
     "fcitx":     (_module_handler("fcitx", "fcitx"),
                   f"{CLI_CMD} fcitx [install|status|uninstall]"),
     "gtk":       (_module_handler("gtktheme", "gtk"),
                   f"{CLI_CMD} gtk [install|status|uninstall]"),
+    "fisher":    (_module_handler("fisher", "fisher"),
+                  f"{CLI_CMD} fisher [install|status|uninstall]"),
     "theme":     (_cmd_theme,     f"{CLI_CMD} theme [toggle|dark|light|sync|status]"),
     "update":    (_cmd_update,    f"{CLI_CMD} update [--force|--no-deploy]"),
     "help":      (_cmd_help,      f"{CLI_CMD} help"),

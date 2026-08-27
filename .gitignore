@@ -1,7 +1,6 @@
 # NyxNiri Git Ignore Rules
 
 # Agent instructions & development notes
-noctalia-docs
 example-widgets
 notes/
 /.codex/
