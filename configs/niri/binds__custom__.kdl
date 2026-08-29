@@ -1,0 +1,12 @@
+binds {
+    Mod+WheelScrollUp cooldown-ms=10 { focus-column-or-monitor-left; }
+    Mod+WheelScrollDown cooldown-ms=10 { focus-column-or-monitor-right; }
+
+    Mod+Shift+Space { switch-preset-column-width; }
+    Mod+Space { spawn "fcitx5-remote" "-t"; }
+
+    Alt+F4 { close-window; }
+
+    Mod+Z { spawn "noctalia" "msg" "panel-toggle" "launcher"; }
+    Mod+Shift+Z repeat=false { spawn "~/.config/niri/scripts/orbit-launcher.py"; }
+}

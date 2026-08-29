@@ -13,6 +13,27 @@ from unittest.mock import patch
 from tests.utils import TempEnv
 
 
+class TestPersonalBindingContract(unittest.TestCase):
+    def test_personal_bindings_are_preserved_in_dunder_include(self):
+        root = Path(__file__).resolve().parents[1]
+        config = (root / "configs/niri/config.kdl").read_text(encoding="utf-8")
+        binds = (root / "configs/niri/binds.kdl").read_text(encoding="utf-8")
+        custom_path = root / "configs/niri/binds__custom__.kdl"
+        self.assertIn('include optional=true "binds__custom__.kdl"', config)
+        self.assertNotIn("Mod+Space { switch-preset-column-width; }", binds)
+        custom = custom_path.read_text(encoding="utf-8")
+        for binding in (
+            "Mod+WheelScrollUp cooldown-ms=10 { focus-column-or-monitor-left; }",
+            "Mod+WheelScrollDown cooldown-ms=10 { focus-column-or-monitor-right; }",
+            "Mod+Shift+Space { switch-preset-column-width; }",
+            'Mod+Space { spawn "fcitx5-remote" "-t"; }',
+            "Alt+F4 { close-window; }",
+            'Mod+Z { spawn "noctalia" "msg" "panel-toggle" "launcher"; }',
+            'Mod+Shift+Z repeat=false { spawn "~/.config/niri/scripts/orbit-launcher.py"; }',
+        ):
+            self.assertIn(binding, custom)
+
+
 class TestAtomicReplaceFileRollback(unittest.TestCase):
     """If the 2nd rename fails, dest must be restored from old_dest."""
 

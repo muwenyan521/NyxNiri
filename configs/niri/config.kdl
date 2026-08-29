@@ -13,6 +13,7 @@ include "rules.kdl"
 include optional=true "rules_optional.kdl"
 // 引入快捷键绑定配置
 include "binds.kdl"
+include optional=true "binds__custom__.kdl"
 
 overview {
     backdrop-color "#0a0f1488"

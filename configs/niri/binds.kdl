@@ -44,8 +44,6 @@ binds {
     // 按 Shorin 习惯切换预设列宽 / Switch preset column width using the Shorin key
     Mod+R { switch-preset-column-width; }
     Mod+F2 { spawn "noctalia" "msg" "settings-toggle"; }
-    Mod+Shift+Z { spawn "noctalia" "msg" "panel-toggle" "launcher"; }
-
     // 切换 Noctalia 电源/会话菜单 / Toggle Noctalia power/session menu
     Mod+Alt+X { spawn "noctalia" "msg" "panel-toggle" "session"; }
 
@@ -150,7 +148,6 @@ binds {
     Mod+Alt+F { fullscreen-window; }
 
     // 循环切换预设列宽比例 / Switch preset column widths
-    Mod+Space { switch-preset-column-width; }
     Mod+Shift+R { switch-preset-window-height; }
     Mod+Ctrl+R { reset-window-height; }
 
@@ -196,10 +193,6 @@ binds {
     // -------------------------------------------------------------------------
     // 6. 鼠标与滚轮绑定 / Mouse & Wheel Binds
     // -------------------------------------------------------------------------
-    // 滚轮上下滚动切换工作区 (带 150ms 冷却防误触) / Scroll wheel up/down to switch workspace (150ms cooldown)
-    Mod+WheelScrollDown cooldown-ms=150 { focus-workspace-down; }
-    Mod+WheelScrollUp   cooldown-ms=150 { focus-workspace-up; }
-
     // Ctrl+滚轮上下滚动携带当前列切换工作区 / Ctrl+Scroll wheel up/down to move column between workspaces
     Mod+Ctrl+WheelScrollDown cooldown-ms=150 { move-column-to-workspace-down; }
     Mod+Ctrl+WheelScrollUp   cooldown-ms=150 { move-column-to-workspace-up; }
