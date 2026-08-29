@@ -18,6 +18,19 @@ _REPO = Path(__file__).resolve().parent.parent
 _TOGGLE = _REPO / "configs" / "niri" / "scripts" / "niri-scratch-toggle.sh"
 _CLEAN_CACHE = _REPO / "configs" / "fish" / "clean-cache.py"
 _START_NOCTALIA = _REPO / "configs" / "niri" / "scripts" / "start-noctalia.sh"
+_FISH_CONFIG = _REPO / "configs" / "fish" / "config.fish"
+
+
+class TestFishCompletionBindings(unittest.TestCase):
+    def test_tab_opens_candidates_and_right_arrow_accepts_suggestion(self):
+        source = _FISH_CONFIG.read_text(encoding="utf-8")
+
+        self.assertIn("function custom_right_arrow", source)
+        self.assertIn("commandline -f accept-autosuggestion", source)
+        self.assertIn("commandline -f forward-char", source)
+        self.assertIn(r"bind \t complete", source)
+        self.assertIn("bind right custom_right_arrow", source)
+        self.assertNotIn("bind \\t custom_tab_complete", source)
 
 
 class TestNoctaliaStartup(unittest.TestCase):

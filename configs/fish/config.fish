@@ -303,20 +303,21 @@ if status is-interactive
     # No greeting
     set fish_greeting
 
-    # Tab 智能自动补全：优先采纳灰色历史建议，无建议时触发 Tab 列表补全
-    # 注：必须用 commandline --showing-suggestion 判断，不能用 -f accept-autosuggestion
-    # （后者只是把动作塞进队列并恒返回 true，会导致 else 分支永不执行、文件补全失效）
-    function custom_tab_complete
+    # 右箭头接受灰色 autosuggestion；没有建议时保留原生向右移动。
+    function custom_right_arrow
         if commandline --showing-suggestion
             commandline -f accept-autosuggestion
         else
-            commandline -f complete
+            commandline -f forward-char
         end
     end
 
     function fish_user_key_bindings
-        # 绑定 Tab 键
-        bind \t custom_tab_complete
+        # Tab 始终进入候选补全，右箭头才接受当前 autosuggestion。
+        bind \t complete
+        bind right custom_right_arrow
+        bind -M insert \t complete
+        bind -M insert right custom_right_arrow
         # Ctrl+V 粘贴系统剪贴板（fzf.fish 默认把 Ctrl+V 占用为变量搜索，此处覆盖回粘贴；
         # fish_user_key_bindings 在插件绑定之后执行，覆盖是时序保证的）
         bind \cv fish_clipboard_paste
