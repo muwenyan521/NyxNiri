@@ -185,7 +185,7 @@ Official presets update with `nyxniri update`; private ones live in `~/.config/N
 
 **Wallpaper & video pack:** high-res wallpapers and live videos (~100MB) live in [wallpaper-collection](https://github.com/ech678/wallpaper-collection). Opt-in during `install` or download anytime via `nyxniri wallpapers`.
 
-**Noctalia Greeter:** greetd login screen matching Noctalia style. `nyxniri greeter install` installs `greetd` + `noctalia-greeter` (AUR), backs up `/etc/greetd/config.toml`, and configures Polkit rules. Does not disable existing display managers.
+**Noctalia Greeter:** greetd login screen matching Noctalia style, `nyxniri greeter install` installs `greetd` + `noctalia-greeter` (AUR), backs up existing configuration, configures Polkit rules, then switches the next boot to greetd without ending the current session, a failed switch or `nyxniri greeter uninstall` restores the previous display manager
 
 ## Tooling
 
@@ -222,7 +222,7 @@ Official presets update with `nyxniri update`; private ones live in `~/.config/N
 | :--- | :--- |
 | `nyxniri doctor` | Dependency + system health check |
 | `nyxniri deps` | Open dependency check & install menu |
-| `nyxniri apps` | Open recommended apps installer (Nautilus, Mission Center, Fcitx5 Rime) |
+| `nyxniri apps` | Category-grouped recommended apps installer (Brave, Steam, WeChat, ...) |
 | `nyxniri wallpapers` | Download the full wallpaper & video pack from the external repo |
 | `nyxniri theme [toggle\|dark\|light\|sync\|status]` | Switch or sync system dark/light theme |
 | `nyxniri bug` / `nyxniri report` | Generate diagnostic bug report |

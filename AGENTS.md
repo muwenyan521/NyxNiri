@@ -78,6 +78,7 @@ HOME=$(mktemp -d) ./install.sh test
 1. **代码修改**：跑语法检查 `python3 -m compileall nyxniri` + `shellcheck`（成本极低，无例外）。
 2. **行为/逻辑改动**：跑 `python3 -m unittest discover -s tests -q`（契约测试，捕获回归）。
 3. **部署流程改动**：追加沙箱部署测试 `HOME=$(mktemp -d) ./install.sh test`。
+4. **文档同步**：改动涉及 `atomic_replace_item` 签名、manifest schema、CLI 命令、子包结构、部署/保留机制等 wiki 描述的行为时，同步更新 `llms-wiki/` 对应页（陈述参考，非生成——改完手验一遍）。
 
 ---
 
@@ -93,6 +94,7 @@ HOME=$(mktemp -d) ./install.sh test
 | NVIDIA env 变量 | 默认注释，仅 `lspci` 检测后由部署引擎自动解注释，绝不能默认开启 |
 | 网络命令（curl 等） | 必须带 `--connect-timeout`，非关键调用加容错 |
 | 引擎代码（`nyxniri/`） | 避免硬编码特定项目名，用 `constants.py` 常量；TUI 文案可适当灵活 |
+| 改动涉及 wiki 描述的行为 | 同步更新 `llms-wiki/` 对应页，改完手验一遍 |
 
 **扩展指南（加法不是重构）**：
 

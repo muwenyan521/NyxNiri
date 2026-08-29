@@ -185,7 +185,7 @@ NyxNiri
 
 **壁纸和动态视频包：** 高清壁纸和动态视频（约 100MB）在独立仓库 [wallpaper-collection](https://github.com/ech678/wallpaper-collection)。`install` 时可选拉取，或随时用 `nyxniri wallpapers` 下载。
 
-**Noctalia Greeter：** 和 Noctalia 主题一致的 greetd 登录界面。`nyxniri greeter install` 装 `greetd` + `noctalia-greeter`（AUR），备份现有配置并写入 Polkit 规则；不禁用已有显示管理器。
+**Noctalia Greeter：** 和 Noctalia 主题一致的 greetd 登录界面，`nyxniri greeter install` 装 `greetd` + `noctalia-greeter`（AUR），备份现有配置并写入 Polkit 规则，随后切换下次启动使用 greetd，不会中断当前图形会话，切换失败或运行 `nyxniri greeter uninstall` 会恢复原显示管理器
 
 ## 工具
 
@@ -222,7 +222,7 @@ NyxNiri
 | :--- | :--- |
 | `nyxniri doctor` | 依赖与系统健康检查 |
 | `nyxniri deps` | 打开依赖检查与安装菜单 |
-| `nyxniri apps` | 常用软件安装菜单（Nautilus、Mission Center、Fcitx5 Rime） |
+| `nyxniri apps` | 常用软件安装菜单（按用途分组：浏览器、社交通讯、游戏等） |
 | `nyxniri wallpapers` | 从外部仓库下载全套壁纸和动态视频包 |
 | `nyxniri theme [toggle\|dark\|light\|sync\|status]` | 切换或同步系统深浅主题 |
 | `nyxniri bug` / `nyxniri report` | 生成诊断报告 |

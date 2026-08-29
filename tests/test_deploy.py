@@ -161,6 +161,60 @@ class TestEffectsSymlinkBroken(unittest.TestCase):
             self.assertEqual(effects_sym.resolve(), effects_normal.resolve())
 
 
+class TestPreserveInjectionBeforeSwap(unittest.TestCase):
+    """manifest preserve files must be in tmp_new BEFORE rename — no post-swap window."""
+
+    def setUp(self):
+        self._ctx = TempEnv()
+        self._ctx.__enter__()
+
+    def tearDown(self):
+        self._ctx.__exit__()
+
+    def test_preserve_file_survives_swap_with_user_content(self):
+        """preserve=["monitor.kdl"] → dest/monitor.kdl keeps user's content, not repo's."""
+        from nyxniri.deploy.atomic import atomic_replace_item
+
+        with tempfile.TemporaryDirectory() as workdir:
+            workdir = Path(workdir)
+            src = workdir / "srcdir"
+            src.mkdir()
+            (src / "config.kdl").write_text("new config")
+            (src / "monitor.kdl").write_text("repo default")  # would clobber user's
+
+            dest = workdir / "dest_dir"
+            dest.mkdir()
+            (dest / "config.kdl").write_text("old config")
+            (dest / "monitor.kdl").write_text("user monitors")  # must survive
+
+            result = atomic_replace_item(src, dest, preserve=["monitor.kdl"])
+
+            self.assertTrue(result)
+            self.assertEqual((dest / "config.kdl").read_text(), "new config")
+            self.assertEqual((dest / "monitor.kdl").read_text(), "user monitors",
+                             "preserve file must keep user content, not repo default")
+
+    def test_preserve_skipped_when_dest_file_missing(self):
+        """preserve on a non-existent file is a no-op, swap still succeeds."""
+        from nyxniri.deploy.atomic import atomic_replace_item
+
+        with tempfile.TemporaryDirectory() as workdir:
+            workdir = Path(workdir)
+            src = workdir / "srcdir"
+            src.mkdir()
+            (src / "config.kdl").write_text("new")
+
+            dest = workdir / "dest_dir"
+            dest.mkdir()
+            (dest / "config.kdl").write_text("old")
+
+            result = atomic_replace_item(src, dest, preserve=["monitor.kdl"])
+
+            self.assertTrue(result)
+            self.assertFalse((dest / "monitor.kdl").exists(),
+                             "No monitor.kdl in dest → repo's (absent) ships, no crash")
+
+
 class TestWallpaperNoClobber(unittest.TestCase):
     """Wallpaper pack download should not overwrite existing user files."""
 

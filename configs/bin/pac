@@ -22,11 +22,16 @@ if [[ "${1:-}" == "--generate-list" ]]; then
     INSTALLED_LIST="$3"
     AUR_CACHE="$4"
     MSG_INSTALLED="$5"
+    SEARCH_MODE="${6:-all}"
+    SEARCH_QUERY="${7:-}"
     CACHE_TIME=3600
 
     AWK_CMD='
         FNR==NR { installed[$1]=1; next }
         {
+            if (mode == "aur" && $1 != "aur") next
+            if (mode == "repo" && $1 == "aur") next
+            if (query != "" && index(tolower($2), tolower(query)) == 0) next
             status = ($2 in installed) ? ci " ✔ " label r : ""
             
             # 先打印带有颜色的源，紧接着打印重置符 \033[0m
@@ -45,6 +50,7 @@ if [[ "${1:-}" == "--generate-list" ]]; then
 
     # 2. 官方源数据
     pacman -Sl | awk -v c='\033[34m' -v ci='\033[32m' -v r='\033[0m' \
+        -v mode="$SEARCH_MODE" -v query="$SEARCH_QUERY" \
         -v label="$MSG_INSTALLED" \
         "$AWK_CMD" "$INSTALLED_LIST" -
 
@@ -70,6 +76,7 @@ if [[ "${1:-}" == "--generate-list" ]]; then
     if [[ -s "$AUR_CACHE" ]]; then
         awk '{print "aur", $1, "-"}' "$AUR_CACHE" | \
         awk -v c='\033[35m' -v ci='\033[32m' -v r='\033[0m' \
+            -v mode="$SEARCH_MODE" -v query="$SEARCH_QUERY" \
             -v label="$MSG_INSTALLED" \
             "$AWK_CMD" "$INSTALLED_LIST" -
     fi
@@ -137,6 +144,21 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+SEARCH_MODE="all"
+SEARCH_QUERY="${QUERY_ARGS[*]:-}"
+if [[ ${#QUERY_ARGS[@]} -gt 0 ]]; then
+    case "${QUERY_ARGS[0],,}" in
+        aur)
+            SEARCH_MODE="aur"
+            SEARCH_QUERY="${QUERY_ARGS[*]:1}"
+            ;;
+        pac|repo)
+            SEARCH_MODE="repo"
+            SEARCH_QUERY="${QUERY_ARGS[*]:1}"
+            ;;
+    esac
+fi
 
 # --- 3. 本地化多语言字典 (使用安全的关联数组) ---
 declare -A MSG
@@ -1606,7 +1628,8 @@ trap abort INT TERM
 
 # --- 7. 数据生成器 (后台运行) ---
 # 利用内部自调用作为守护进程生成初始列表
-"$SCRIPT_PATH" --generate-list "$FORCE_REFRESH" "$INSTALLED_LIST" "$AUR_CACHE" "${MSG[INSTALLED]}" > "$PIPE_FIFO" 2>/dev/null &
+"$SCRIPT_PATH" --generate-list "$FORCE_REFRESH" "$INSTALLED_LIST" "$AUR_CACHE" "${MSG[INSTALLED]}" \
+    "$SEARCH_MODE" "$SEARCH_QUERY" > "$PIPE_FIFO" 2>/dev/null &
 PID_GEN=$!
 
 # --- 8. 交互式 FZF 渲染 ---
@@ -1619,7 +1642,7 @@ else
 fi
 
 # 构造安全的 reload 命令
-RELOAD_CMD=$(printf "%q " "$SCRIPT_PATH" --generate-list true "$INSTALLED_LIST" "$AUR_CACHE" "${MSG[INSTALLED]}")
+RELOAD_CMD=$(printf "%q " "$SCRIPT_PATH" --generate-list true "$INSTALLED_LIST" "$AUR_CACHE" "${MSG[INSTALLED]}" "$SEARCH_MODE" "$SEARCH_QUERY")
 
 set +e
 fzf --multi --ansi \
@@ -1630,7 +1653,8 @@ fzf --multi --ansi \
     --bind "ctrl-r:reload($RELOAD_CMD)" \
     --tiebreak=index \
     --header "$FZF_HEADER" \
-    --query "${QUERY_ARGS[*]:-}" \
+    --nth=2 \
+    --query "$SEARCH_QUERY" \
     < "$PIPE_FIFO" \
     > "$TARGET_FILE"
 FZF_EXIT=$?

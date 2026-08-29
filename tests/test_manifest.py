@@ -154,7 +154,7 @@ class TestRealRepoManifests(unittest.TestCase):
 
     def test_niri_manifest(self):
         m = manifest.load_manifest(self.env.configs_src / "niri")
-        self.assertEqual(m.preserve, ["monitor.kdl"])
+        self.assertEqual(m.preserve, ["monitor.kdl", "effects.kdl"])
         self.assertEqual(m.chmod, ["scripts/*.sh"])
         self.assertTrue(m.is_deployable)
         # dir name = package = binary → no [packages] override needed
@@ -176,10 +176,7 @@ class TestRealRepoManifests(unittest.TestCase):
             self.assertFalse(m.is_deployable, f"{name} has no config dir")
             self.assertTrue(m.is_optional, f"{name} should be in .optional-apps.toml")
         opts = manifest.discover_optional_apps()
-        for name in (
-            "nautilus", "missioncenter", "fcitx5-rime", "yazi", "btop",
-            "duf", "bat", "procs", "dust", "git-delta", "vivid",
-        ):
+        for name in ("nautilus", "missioncenter", "fcitx5-rime"):
             self.assertIn(name, opts)
 
     def test_deployable_excludes_manifest_only(self):
@@ -215,6 +212,51 @@ class TestRealRepoManifests(unittest.TestCase):
         self.assertEqual(m.packages_aur, ["rime-ice-git"])
         self.assertIn("fcitx5-rime", m.packages_repo)
         self.assertTrue(m.is_optional)
+
+    def test_zed_dual_axis_merge(self):
+        # zed ships config AND registers in .optional-apps.toml (§2 coexistence):
+        # deployability comes from the dir, optional-axis fields from the toml.
+        manifests = dict(manifest.discover_manifest_apps())
+        m = manifests["zed"]
+        self.assertTrue(m.is_optional)
+        self.assertTrue(m.is_deployable)
+        self.assertEqual(m.category, "dev")
+        self.assertEqual(m.packages_repo, ["zed"])
+        self.assertEqual(m.detect, "zed")
+        self.assertIn("zed", manifest.discover_optional_apps())
+        self.assertIn("zed", manifest.discover_deployable_apps())
+
+    def test_flatpak_only_apps_have_no_pacman_packages(self):
+        # qq/wechat/spotify install via Flathub. repo=[] must override the
+        # [<name>] default, or pacman would be handed a nonexistent package.
+        manifests = dict(manifest.discover_manifest_apps())
+        expected = {
+            "qq": ["com.qq.QQ"],
+            "wechat": ["com.tencent.WeChat"],
+            "spotify": ["com.spotify.Client"],
+        }
+        for name, ids in expected.items():
+            m = manifests[name]
+            self.assertEqual(m.packages_repo, [], f"{name} must declare repo = []")
+            self.assertEqual(m.packages_aur, [])
+            self.assertEqual(m.packages_flatpak, ids)
+            self.assertFalse(m.is_deployable)
+            self.assertTrue(m.is_optional)
+
+    def test_all_optional_apps_categorized(self):
+        known = {"browser", "office", "dev", "social", "media", "game",
+                 "video", "download", "proxy", "terminal", "system"}
+        for _name, m in manifest.discover_manifest_apps():
+            if m.is_optional:
+                self.assertIn(m.category, known, f"{_name} has unknown category")
+
+    def test_full_optional_catalog(self):
+        opts = manifest.discover_optional_apps()
+        for name in ("brave-origin", "libreoffice", "vscode", "zed", "wechat", "qq",
+                     "telegram", "spotify", "steam", "lutris", "protonplus", "kdenlive",
+                     "obs", "motrix", "flclash", "shelly", "nautilus", "missioncenter",
+                     "fcitx5-rime"):
+            self.assertIn(name, opts)
 
     def test_personal_tooling_uses_optional_manifest_entries(self):
         manifests = dict(manifest.discover_manifest_apps())

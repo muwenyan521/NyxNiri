@@ -7,8 +7,8 @@
 | 命令 | 干啥 |
 |---|---|
 | `install [full\|config]`（alias `deploy`） | 部署配置（full = + 壁纸 + 模块） |
-| `update [--force\|--no-deploy]` | 拉新版本 + 重新部署（system 模式 → 提示 pacman） |
-| `preset <app> [list\|apply <name>\|save <name>\|delete <name>]` | 切/管理预设 |
+| `update [--force\|--no-deploy] [--to <tag\|commit>]` | 拉新版本 + 重新部署;`--to` 锁到指定版本（system 模式 → 提示 pacman） |
+| `preset <app> [list\|apply <name>\|save <name>\|edit <name>\|delete <name>]` | 切/管理预设 |
 
 ## 管"安装方式"的
 

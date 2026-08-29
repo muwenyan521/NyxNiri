@@ -25,7 +25,7 @@
 | `snapshot` | 保存 config_dir 当前状态 | `nyxniri snapshot [note]` |
 | `rollback` | 从 snapshot 恢复 config_dir | `nyxniri rollback [index]` |
 | `preset` | 切换某 app 的活动变体 | `nyxniri preset <app> …` |
-| `module` | fcitx / greeter / gtk 同款三件套动词 | `nyxniri <module> [install\|status\|uninstall]` |
+| `module` | fcitx / fisher / greeter / gtk 同款三件套动词 | `nyxniri <module> [install\|status\|uninstall]` |
 
 ## 内容术语（三层叠加）
 

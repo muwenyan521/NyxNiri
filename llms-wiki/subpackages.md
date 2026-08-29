@@ -9,7 +9,7 @@
 nyxniri/
 ├── __init__.py · __main__.py          包入口
 ├── constants.py                        路径 / 包名 / ANSI 色阶常量
-├── core.py                             Environment（run_mode、路径）、锁、日志、path 原语（remove_path/copy_path）、CLI 软链、PATH 遮蔽
+├── core.py                             Environment（run_mode、路径）、锁、日志、path 原语（remove_path/copy_path）、CLI 软链、PATH 遮蔽、timed_run
 ├── i18n.py                             msg() + TRANSLATIONS（zh/en，test_i18n 自动校验）
 ├── tui.py                              Menu / CheckboxList / PresetSwitcher / 原语
 ├── network.py                          git pull / curl（带 connect-timeout + 容错）
@@ -25,7 +25,7 @@ nyxniri/
 │   ├── hardware.py                     _phase_hardware_patches（NVIDIA env，独立硬件自适应层）
 │   ├── preset.py                       预设切换（active 状态、src 四分支、apply 窄路径）
 │   └── deploy.py                       编排器：discover_config_items、_phase_atomic_deployment、
-│                                       _phase_post_install_services、fisher_uninstall、
+│                                       _phase_post_install_services、
 │                                       render_completion_screen、deploy_selected_configs、test_deploy
 │
 ├── state/                              状态子包
@@ -52,10 +52,10 @@ nyxniri/
 
 - `nyxniri.deploy/__init__`：`atomic_replace_item`、`discover_config_items`、`deploy_selected_configs`、
   `deploy_wallpapers`、`wallpapers_pack_present`、`render_completion_screen`、`test_deploy`、
-  `fisher_uninstall`、preset 全套（`apply_preset`/`list_presets`/…）、manifest 全套
+  preset 全套（`apply_preset`/`list_presets`/…）、manifest 全套
   （`load_manifest`/`discover_deployable_apps`/`discover_optional_apps`）…
 - `nyxniri.state/__init__`：`backup_configs`、`rollback_configs`、`list_backups`、`delete_backup`、
-  `get_all_backups`、`uninstall_nyxniri`（path 原语 `copy_path`/`remove_path` 在 core.py，按需直连）
+  `get_all_backups`、`get_backup_base_dir`、`uninstall_nyxniri`（path 原语 `copy_path`/`remove_path` 在 core.py，按需直连）
 - `nyxniri.modules/__init__`：fcitx/fisher/greeter/gtktheme 四件套动词（`fcitx_install`/`fisher_uninstall`/…）
 
 ## Import 约定（两套路径，按场景选）
@@ -70,7 +70,8 @@ from nyxniri.state import backup_configs, uninstall_nyxniri
 读的源模块；re-export 在 `__init__` import 时已绑定旧引用，patch 源不影响 re-export 绑定。
 ```python
 # 引擎内懒加载（state/uninstall.py 内）
-from nyxniri.deploy.deploy import discover_config_items, fisher_uninstall
+from nyxniri.deploy.deploy import discover_config_items
+from nyxniri.modules.fisher import fisher_uninstall
 from nyxniri.deploy.atomic import atomic_replace_item
 # 测试打补丁
 patch("nyxniri.deploy.atomic.atomic_replace_item", return_value=False)
@@ -82,6 +83,15 @@ patch("nyxniri.deploy.hardware._phase_hardware_patches")
 CLI 的 `greeter`/`fcitx`/`gtk` 命令经 `_module_handler(module_name, triad_name)` 工厂分发，
 懒加载 `importlib.import_module(f"nyxniri.modules.{module_name}")`——这样测试 `patch` 能命中
 （架构 §13：`_module_handler` 动态 import 改 `nyxniri.modules.{name}`，一处）。
+
+## 外部命令超时（timed_run，铁律）
+
+所有带 `timeout=` 的 `subprocess.run` 必须走 `core.timed_run`：超时降级为返回
+`None` + WARN 日志，**不抛** `TimeoutExpired`。背景：v3.0.3 给外部命令加了超时
+防卡死，但只有 network.py 自己接了异常——fisher install 弱网 60s 超时直接炸穿
+整个部署（真实事故：配置已部署完，完成界面没渲染，用户拿到裸 traceback）。
+原则：外部命令是"锦上添花"，超时 = 跳过该步继续走，绝不阻断主流程。调用方
+拿到 `None` 按各处语义降级（探测失败/未运行/依赖未知）。
 
 ## install.sh 完整性校验
 

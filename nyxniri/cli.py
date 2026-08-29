@@ -1,6 +1,7 @@
 """CLI entry point, command-line arguments dispatcher, and interactive control panel menus."""
 
 import os
+import shutil
 import subprocess
 import sys
 from typing import List, Optional
@@ -9,6 +10,8 @@ from nyxniri.constants import (
     CLI_CMD,
     FCITX_THEME,
     GREETER_PKG,
+    PENDING_UPGRADE_ENV,
+    PENDING_UPGRADE_MENU_ENV,
     PROJECT_NAME,
     THEME_ENGINE,
 )
@@ -71,7 +74,7 @@ from nyxniri.state import (
     uninstall_nyxniri,
 )
 from nyxniri.i18n import msg
-from nyxniri.network import safe_git_pull
+from nyxniri.network import safe_git_checkout_ref, safe_git_pull
 from nyxniri.deploy import apply_preset, collect_presets, delete_preset, edit_preset, list_presets, save_preset
 from nyxniri.tui import (
     CheckboxEntry,
@@ -199,6 +202,10 @@ def _phase_preflight_check(
 
 def install_configs_workflow(mode: str = "full") -> bool:
     """Full execution pipeline for dotfiles, dependencies, wallpapers, and optional modules."""
+    if mode == "full" and not shutil.which("pacman"):
+        print(msg("distro_unsupported"))
+        print(msg("distro_unsupported_hint"))
+        return False
     if sys.stdin.isatty():
         chosen_dict = run_master_component_menu(is_update=False, mode=mode)
         if not chosen_dict:
@@ -272,7 +279,8 @@ def install_configs_workflow(mode: str = "full") -> bool:
     if do_greeter:
         cur_step += 1
         print(msg("install_step_greeter", f"{cur_step}/{steps}"))
-        greeter_install()
+        if not greeter_install():
+            return False
 
     # Completion
     render_completion_screen(
@@ -297,9 +305,11 @@ def offer_overwrite_upgrade(flag: str = "") -> bool:
         if fcitx_enabled():
             fcitx_install()
         try:
-            greeter_install()
+            if not greeter_install():
+                return False
         except Exception as e:
             log_msg("WARN", f"Greeter install skipped during --force update: {e}")
+            return False
         render_completion_screen("update", wallpaper_result=wallpaper_result)
         return True
     elif flag == "--no-deploy":
@@ -343,7 +353,8 @@ def offer_overwrite_upgrade(flag: str = "") -> bool:
             if chosen["fcitx"]:
                 fcitx_install()
             if chosen["greeter"]:
-                greeter_install()
+                if not greeter_install():
+                    return False
             render_completion_screen(
                 "update",
                 chosen_items=chosen["configs"],
@@ -361,8 +372,11 @@ def offer_overwrite_upgrade(flag: str = "") -> bool:
             if src.exists() and dest.exists():
                 diff_cmds.append(f"diff -urN --color=always '{dest}' '{src}'")
         if diff_cmds:
-            full_cmd = " ; ".join(diff_cmds) + " | less -R"
-            subprocess.run(full_cmd, shell=True, check=False)
+            full_cmd = " ; ".join(diff_cmds)
+            if shutil.which("less"):
+                subprocess.run(full_cmd + " | less -R", shell=True, check=False)
+            else:
+                subprocess.run(full_cmd, shell=True, check=False)
     else:
         print(msg("log_config_deploy_skipped"))
     return True
@@ -394,7 +408,7 @@ def snapshot_menu_loop() -> None:
             MenuItem(label=msg("snapshot_sub_rollback")),
             MenuItem(label=msg("snapshot_sub_back"), style="subtle"),
         ]
-        menu = Menu("snapshot_menu_title", items, hint_key="submenu_hint")
+        menu = Menu("snapshot_menu_title", items, hint_key="submenu_hint", compact=True)
         choice = menu.run()
         if choice == 0:
             sys.stdout.write(msg("snapshot_note_prompt"))
@@ -424,7 +438,7 @@ def greeter_menu_loop() -> None:
             MenuItem(label=msg("greeter_sub_uninstall"), style="warn"),
             MenuItem(label=msg("greeter_sub_back"), style="subtle"),
         ]
-        menu = Menu("greeter_menu_title", items, hint_key="submenu_hint")
+        menu = Menu("greeter_menu_title", items, hint_key="submenu_hint", compact=True)
         choice = menu.run()
         if choice == 0: greeter_install(); press_any_key()
         elif choice == 1: greeter_status(); press_any_key()
@@ -440,7 +454,7 @@ def fcitx_menu_loop() -> None:
             MenuItem(label=msg("fcitx_sub_uninstall"), style="warn"),
             MenuItem(label=msg("fcitx_sub_back"), style="subtle"),
         ]
-        menu = Menu("fcitx_menu_title", items, hint_key="submenu_hint")
+        menu = Menu("fcitx_menu_title", items, hint_key="submenu_hint", compact=True)
         choice = menu.run()
         if choice == 0: fcitx_install(); press_any_key()
         elif choice == 1: fcitx_status(); press_any_key()
@@ -456,7 +470,7 @@ def gtk_menu_loop() -> None:
             MenuItem(label=msg("gtk_sub_uninstall"), style="warn"),
             MenuItem(label=msg("gtk_sub_back"), style="subtle"),
         ]
-        menu = Menu("gtk_menu_title", items, hint_key="submenu_hint")
+        menu = Menu("gtk_menu_title", items, hint_key="submenu_hint", compact=True)
         choice = menu.run()
         if choice == 0: gtktheme_install(); press_any_key()
         elif choice == 1: gtktheme_status(); press_any_key()
@@ -472,7 +486,7 @@ def fisher_menu_loop() -> None:
             MenuItem(label=msg("fisher_sub_uninstall"), style="warn"),
             MenuItem(label=msg("fisher_sub_back"), style="subtle"),
         ]
-        menu = Menu("fisher_menu_title", items, hint_key="submenu_hint")
+        menu = Menu("fisher_menu_title", items, hint_key="submenu_hint", compact=True)
         choice = menu.run()
         if choice == 0: fisher_install(); press_any_key()
         elif choice == 1: fisher_status(); press_any_key()
@@ -484,6 +498,9 @@ def deps_menu_loop() -> None:
     if not sys.stdin.isatty():
         print(msg("interactive_terminal_required"), file=sys.stderr)
         return
+    if not shutil.which("pacman"):
+        print(msg("deps_menu_unsupported"))
+        return
 
     while True:
         items = [
@@ -491,7 +508,7 @@ def deps_menu_loop() -> None:
             MenuItem(label=msg("deps_sub_apps")),
             MenuItem(label=msg("deps_sub_back"), style="subtle"),
         ]
-        menu = Menu("deps_menu_title", items, hint_key="submenu_hint")
+        menu = Menu("deps_menu_title", items, hint_key="submenu_hint", compact=True)
         choice = menu.run()
         if choice == 0: run_dep_menu_loop(); press_any_key()
         elif choice == 1: run_optional_apps_menu_loop(); press_any_key()
@@ -512,7 +529,7 @@ def extensions_menu_loop() -> None:
             MenuItem(label=label_fisher),
             MenuItem(label=msg("ext_back"), style="subtle"),
         ]
-        menu = Menu("ext_menu_title", items, hint_key="submenu_hint")
+        menu = Menu("ext_menu_title", items, hint_key="submenu_hint", compact=True)
         choice = menu.run()
         if choice == 0: greeter_menu_loop()
         elif choice == 1: fcitx_menu_loop()
@@ -521,21 +538,36 @@ def extensions_menu_loop() -> None:
         elif choice == 4: break
 
 def preset_switcher_loop() -> None:
-    """Interactive dual-pane preset switcher (§9). Left = apps, right = presets."""
+    """Interactive Preset Studio (§9). Left = apps, right = presets + in-place actions."""
     if not sys.stdin.isatty():
         print(msg("interactive_terminal_required"), file=sys.stderr)
         return
 
+    from nyxniri.deploy.preset import get_preset_info
+
     apps = discover_config_items()
 
-    def presets_for(app: str):
-        return [(name, is_active) for name, _, is_active in collect_presets(app)]
+    def on_action(action: str, app: str, name: str) -> Optional[str]:
+        if action == "apply":
+            ok = apply_preset(app, name)
+            return msg("preset_toast_applied", app, name) if ok else msg("preset_apply_failed", app, name)
+        elif action == "save":
+            ok = save_preset(app, name)
+            return msg("preset_toast_saved", app, name) if ok else None
+        elif action == "delete":
+            ok = delete_preset(app, name)
+            return msg("preset_toast_deleted", app, name) if ok else None
+        elif action == "edit":
+            edit_preset(app, name)
+            return msg("preset_edit_opened", app, name)
+        return None
 
-    chosen = PresetSwitcher(apps, presets_for).run()
-    if chosen:
-        app, name = chosen
-        apply_preset(app, name)
-        press_any_key()
+    PresetSwitcher(
+        apps=apps,
+        presets_for=collect_presets,
+        info_for=get_preset_info,
+        on_action=on_action,
+    ).run()
 
 def main_menu_loop() -> None:
     """Main NyxNiri control panel interactive loop."""
@@ -572,12 +604,17 @@ def main_menu_loop() -> None:
         elif choice == 4:
             update_result = safe_git_pull(env.repo_dir)
             if update_result is True:
-                offer_overwrite_upgrade()
-                check_new_deps_post_update()
                 print(msg("updating_done"))
                 press_any_key()
-                # Re-exec to load new code
-                os.execv(sys.executable, [sys.executable, "-m", "nyxniri"])
+                # Re-exec first: the deploy offer must run on the freshly
+                # pulled code, not on modules loaded before the pull.
+                try:
+                    os.execve(sys.executable, [sys.executable, "-m", CLI_CMD],
+                              {**os.environ, PENDING_UPGRADE_ENV: "",
+                               PENDING_UPGRADE_MENU_ENV: "1"})
+                except Exception as e:
+                    log_msg("ERROR", f"Re-exec failed: {e}")
+                    print(msg("update_restart_needed"), file=sys.stderr)
             elif update_result is False:
                 print(msg("updating_failed"), file=sys.stderr)
             press_any_key()
@@ -756,17 +793,37 @@ def _cmd_theme(sub_args: List[str]) -> int:
         return 1
 
 def _cmd_update(sub_args: List[str]) -> int:
-    flag = sub_args[0] if sub_args else ""
-    if len(sub_args) > 1 or flag not in ("", "--force", "--deploy", "--no-deploy"):
-        exit_usage(f"{CLI_CMD} update [--force|--no-deploy]")
+    usage = f"{CLI_CMD} update [--force|--no-deploy] [--to <tag|commit>]"
+    flag = ""
+    to_ref = ""
+    it = iter(sub_args)
+    for cur in it:
+        if cur == "--to":
+            to_ref = next(it, "")
+            if not to_ref:
+                exit_usage(usage)
+        elif cur in ("--force", "--deploy", "--no-deploy"):
+            if flag:
+                exit_usage(usage)
+            flag = cur
+        else:
+            exit_usage(usage)
     env = get_env()
     check_path_occlusion()
-    update_result = safe_git_pull(env.repo_dir)
+    if to_ref:
+        update_result = safe_git_checkout_ref(env.repo_dir, to_ref)
+    else:
+        update_result = safe_git_pull(env.repo_dir)
     if update_result is True:
-        deploy_ok = offer_overwrite_upgrade(flag)
-        check_new_deps_post_update()
-        print(msg("updating_done"))
-        return 0 if deploy_ok else 1
+        # Hand the deploy over to a fresh process so it runs on the updated
+        # engine code instead of the modules loaded before the pull.
+        try:
+            os.execve(sys.executable, [sys.executable, "-m", CLI_CMD],
+                      {**os.environ, PENDING_UPGRADE_ENV: flag})
+        except Exception as e:
+            log_msg("ERROR", f"Re-exec failed: {e}")
+            print(msg("update_restart_needed"), file=sys.stderr)
+            return 1
     if update_result is False:
         print(msg("updating_failed"), file=sys.stderr)
         return 1
@@ -809,7 +866,7 @@ COMMANDS = {
     "fisher":    (_module_handler("fisher", "fisher"),
                   f"{CLI_CMD} fisher [install|status|uninstall]"),
     "theme":     (_cmd_theme,     f"{CLI_CMD} theme [toggle|dark|light|sync|status]"),
-    "update":    (_cmd_update,    f"{CLI_CMD} update [--force|--no-deploy]"),
+    "update":    (_cmd_update,    f"{CLI_CMD} update [--force|--no-deploy] [--to <tag|commit>]"),
     "help":      (_cmd_help,      f"{CLI_CMD} help"),
     "-h":        (_cmd_help,      f"{CLI_CMD} help"),
     "--help":    (_cmd_help,      f"{CLI_CMD} help"),
@@ -826,6 +883,12 @@ def main() -> None:
     get_env()
     ensure_nyxniri_symlink()
 
+    # Post-update handoff: a previous run pulled new code and re-execed into
+    # us, so the deploy offer runs on the updated engine instead of the stale
+    # modules the old process had loaded before the pull.
+    pending_flag = os.environ.pop(PENDING_UPGRADE_ENV, None)
+    pending_from_menu = os.environ.pop(PENDING_UPGRADE_MENU_ENV, None)
+
     args = sys.argv[1:]
     if args:
         cmd = args[0].lower()
@@ -839,6 +902,16 @@ def main() -> None:
         print(msg("err_unknown_command", args[0]), file=sys.stderr)
         print_help(file=sys.stderr)
         sys.exit(2)
+
+    if pending_flag is not None:
+        deploy_ok = offer_overwrite_upgrade(pending_flag)
+        check_new_deps_post_update()
+        print(msg("updating_done"))
+        if not sys.stdin.isatty():
+            sys.exit(0 if deploy_ok else 1)
+        press_any_key()
+        if not pending_from_menu:
+            sys.exit(0 if deploy_ok else 1)
 
     # Interactive flow
     if not sys.stdin.isatty():

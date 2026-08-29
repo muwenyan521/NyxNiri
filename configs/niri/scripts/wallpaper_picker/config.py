@@ -1,13 +1,11 @@
 """
 NyxNiri Wallpaper Picker Configuration Engine
-Multi-source prioritized wallpaper directory resolver, format definitions, and UI geometry constants.
+Multi-source prioritized wallpaper directory resolver and format definitions.
 """
 
 import os
 import sys
 import subprocess
-
-from nyxui.tokens import token
 
 try:
     import tomllib
@@ -23,27 +21,6 @@ except ImportError:
 STATIC_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".jxl", ".avif", ".bmp", ".svg"}
 VIDEO_EXTENSIONS = {".mp4", ".webm", ".mkv", ".mov", ".gif"}
 ALL_SUPPORTED_EXTENSIONS = STATIC_EXTENSIONS | VIDEO_EXTENSIONS
-
-# ── Geometry & UI Constants (Pure M3E Layout) ───────────────────────────────────
-WIN_WIDTH = 1080.0
-WIN_HEIGHT = 640.0
-WIN_RADIUS = float(token("wallpaper", "window_radius", 28.0))
-
-GRID_COLS = 3
-CARD_WIDTH = 320.0
-CARD_HEIGHT = 216.0
-CARD_RADIUS = float(token("wallpaper", "card_radius", 16.0))
-THUMB_HEIGHT = 180.0  # Exactly 16:9 ratio for 320px width (320 * 9 / 16 = 180)
-INFO_HEIGHT = 36.0
-
-PADDING_X = float(token("wallpaper", "padding_x", 32.0))
-GAP_X = float(token("wallpaper", "gap_x", 24.0))
-GAP_Y = float(token("wallpaper", "gap_y", 20.0))
-
-GRID_VIEWPORT_Y = 118.0
-GRID_VIEWPORT_H = 494.0
-
-HEADER_HEIGHT = 70.0
 
 CACHE_DIR = os.path.expanduser("~/.cache/nyxniri/thumbnails")
 NOCTALIA_CONFIG_PATH = os.path.expanduser("~/.config/noctalia/noctalia-config.toml")
@@ -101,13 +78,7 @@ def get_wallpaper_search_roots() -> list:
                 wp_dir = data.get("wallpaper", {}).get("directory")
                 if wp_dir:
                     candidates.append(os.path.expanduser(wp_dir))
-                plugins = data.get("plugin_settings", {})
-                video_dir = None
-                if isinstance(plugins, dict):
-                    for value in plugins.values():
-                        if isinstance(value, dict) and value.get("video_directory"):
-                            video_dir = value["video_directory"]
-                            break
+                video_dir = data.get("plugin_settings", {}).get("noctalia/mpvpaper", {}).get("video_directory")
                 if video_dir:
                     candidates.append(os.path.expanduser(video_dir))
         except Exception as e:

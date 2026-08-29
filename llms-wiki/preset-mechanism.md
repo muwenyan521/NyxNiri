@@ -8,9 +8,9 @@
 `~/.config/NyxNiri/presets/<app>.active`——一行，内容是预设名或 `default`。不占配置槽
 （这是扔掉 include 间接层、扔掉 `__preset__` 保留名的关键简化：一个概念减两份复杂度）。
 
-- `read_active_preset(app)` → 内容或 `"default"`（文件不存在 / 读失败 / 空白都回 default）。
+- `read_active_preset(app)` → 文件不存在时返回 `"default"`，空白、读失败或非法内容会抛出 `InvalidActivePresetError` 并冻结部署
 - `write_active_preset(app, name)` → **原子写**（temp + `os.replace`）。半写空文件会被
-  `read` 当 default 静默切回——原子写堵死这条故障路径。
+  拒绝并冻结部署——原子写堵死这条故障路径
 
 ## src 四分支（`resolve_preset_src(app, active, dest)`）
 
@@ -36,7 +36,8 @@ deploy 时根据 active 选源目录，四条分支 + 一条冻结：
 "显示新预设、实际旧配置"的错乱态。
 
 - **apply 流程**（`apply_preset`）：`atomic_replace` → `_phase_render_templates(only_app=app)`
-  → `write_active_preset`。deploy-then-write。
+  → `write_active_preset`。deploy-then-write。write 失败（磁盘满/权限）会报错返回
+  False——deploy 已落地、active 未记录，下次 update 按 default 重新部署。
 - **dest-missing reset** 是 sanctioned write-before-deploy：dest 已空，reset 后下次自愈。
 - **update 流程**（`_phase_atomic_deployment`）：active 本就正确，只在 dest-missing 时重置
   写 active；其余分支不重写 active。
