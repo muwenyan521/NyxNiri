@@ -222,9 +222,9 @@ binds {
     XF86AudioPrev        allow-when-locked=true { spawn-sh "command -v playerctl >/dev/null && playerctl previous"; }
     XF86AudioNext        allow-when-locked=true { spawn-sh "command -v playerctl >/dev/null && playerctl next"; }
 
-    // 外接显示器硬件亮度调节 (ddcutil, 允许锁屏状态下生效) / DDC monitor brightness control (allow when locked)
-    XF86MonBrightnessUp   allow-when-locked=true { spawn-sh "command -v ddcutil >/dev/null && ddcutil setvcp 10 + 10 || command -v brightnessctl >/dev/null && brightnessctl set 5%+"; }
-    XF86MonBrightnessDown allow-when-locked=true { spawn-sh "command -v ddcutil >/dev/null && ddcutil setvcp 10 - 10 || command -v brightnessctl >/dev/null && brightnessctl set 5%-"; }
+    // 亮度：内屏走 Noctalia 背光+OSD，外接屏保留 ddcutil（Noctalia 默认关闭 DDC 扫描）
+    XF86MonBrightnessUp   allow-when-locked=true { spawn "~/.config/niri/scripts/niri-brightness.sh" "up"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "~/.config/niri/scripts/niri-brightness.sh" "down"; }
 
     // -------------------------------------------------------------------------
     // 8. 截图按键控制 / Screenshot Controls

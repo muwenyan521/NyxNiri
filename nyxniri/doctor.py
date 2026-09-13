@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import List, Optional
 
 from nyxniri.constants import (
-    Colors,
     FCITX_THEME,
     MAIN_WM,
     PROJECT_NAME,
@@ -76,12 +75,12 @@ def _check_scripts(env) -> None:
         (f"{THEME_ENGINE}/theme-sync.sh", "theme-sync.sh"),
         (f"{THEME_ENGINE}/wallpaper-hook.sh", "wallpaper-hook.sh"),
         (f"{THEME_ENGINE}/mpvpaper-sync.sh", "mpvpaper-sync.sh"),
-        ("fish/clean-cache.py", "clean-cache.py"),
         (f"{MAIN_WM}/scripts/toggle-eyecare.sh", "toggle-eyecare.sh"),
         (f"{MAIN_WM}/scripts/niri-scratch-toggle.sh", "niri-scratch-toggle.sh"),
         (f"{MAIN_WM}/scripts/orbit-launcher.py", "orbit-launcher.py"),
         (f"{MAIN_WM}/scripts/niri-scratch-menu.py", "niri-scratch-menu.py"),
         (f"{MAIN_WM}/scripts/wallpaper-picker.py", "wallpaper-picker.py"),
+        (f"{MAIN_WM}/scripts/niri-brightness.sh", "niri-brightness.sh"),
     ]
     for rel_path, name in scripts_info:
         full_path = config_dir / rel_path
@@ -93,8 +92,6 @@ def _check_scripts(env) -> None:
             else:
                 print(msg("doctor_warn", text(f"脚本缺少执行权限，正在修复: {name}", f"Script was not executable; fixing: {name}")))
                 full_path.chmod(0o755)
-        elif name == "clean-cache.py":
-            print(msg("doctor_err", text("脚本缺失: ~/.config/fish/clean-cache.py", "Script missing: ~/.config/fish/clean-cache.py")))
 
 def _check_eyecare(env) -> None:
     if shutil.which("wlsunset"):
@@ -426,9 +423,13 @@ def generate_bug_report() -> Optional[Path]:
     shell = os.environ.get("SHELL", "Unknown")
 
     # GPU
+    from nyxniri.deploy.hardware import classify_gpu_devices
+
     gpu_info = "Unknown"
+    gpu_devices = "Unknown"
     lspci_res = results.get("lspci")
-    if lspci_res:
+    if lspci_res is not None and lspci_res.returncode == 0:
+        gpu_devices = classify_gpu_devices(lspci_res.stdout)
         gpu_lines = [line for line in lspci_res.stdout.splitlines() if "VGA" in line or "3D" in line or "Display" in line]
         if gpu_lines:
             gpu_info = "\n".join(gpu_lines)
@@ -526,6 +527,7 @@ def generate_bug_report() -> Optional[Path]:
         f"- **Desktop**: {compositor} ({session_type})\n"
         f"- **Shell**: {shell}\n\n"
         f"## 2. Hardware & GPU\n\n"
+        f"PCI device classification: {gpu_devices} (not the active rendering GPU)\n\n"
         f"```text\n{gpu_info}\n```\n\n"
         f"## 3. Connected Displays\n\n"
         f"```text\n{displays}\n```\n\n"

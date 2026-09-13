@@ -21,6 +21,7 @@ capsule_thickness = 0.95999998226761818
 enabled = true
 panel_overlap = 12
 font_family = "JetBrains Mono"
+font_weight = 600
 margin_ends = 14
 margin_edge = 10
 scale = 1.1
@@ -33,7 +34,7 @@ end = [
     "session",
 ]
 center = ["clock"]
-start = ["launcher", "workspaces", "active_window", "group:g1"]
+start = ["launcher", "workspaces", "group:g1"]
 thickness = 36
 
 [[bar.bar.capsule_group]]
@@ -51,9 +52,6 @@ radius = 80.0
 widget_spacing = 12
 
 
-[battery.device."/org/freedesktop/UPower/devices/battery_hidpp_battery_0"]
-warning_threshold = 30
-
 [brightness]
 enable_ddcutil = false
 
@@ -64,7 +62,7 @@ widget_order = ["desktop-widget-0000000000000003"]
 [desktop_widgets.grid]
 cell_size = 16
 major_interval = 4
-visible = true
+visible = false
 
 [desktop_widgets.widget.desktop-widget-0000000000000003]
 box_height = 0.0
@@ -236,7 +234,7 @@ output_path = "/home/user/.local/share/fcitx5/themes/nyxmellow/panel.svg"
 index = 2
 input_path = "/home/user/.local/share/fcitx5/themes/nyxmellow/templates/highlight.svg"
 output_path = "/home/user/.local/share/fcitx5/themes/nyxmellow/highlight.svg"
-post_hook = "if pgrep -x fcitx5 >/dev/null 2>&1; then pkill -x fcitx5; sleep 1; fcitx5 -d >/dev/null 2>&1 & fi"
+post_hook = "fcitx5-remote --check -r >/dev/null 2>&1 || true"
 
 # GTK Material You 主题（移植自 HyprYou，由 Noctalia 动态渲染到 gtk.css）
 # 路径中的 /home/user 为占位符，由 nyxniri.deploy 在部署时替换为实际 $HOME
@@ -250,6 +248,13 @@ index = 4
 input_path = "/home/user/.config/noctalia/templates/gtk-4.0.css"
 output_path = "/home/user/.config/gtk-4.0/gtk.css"
 
+# Niri glow-material-you: Noctalia is the only writer of the rendered layout.
+[theme.templates.user.nyxniri_niri_glow_material_you]
+index = 5
+input_path = "/home/user/.config/noctalia/templates/niri-glow-material-you.kdl"
+output_path = "/home/user/.config/noctalia/templates/niri-glow-material-you.rendered.kdl"
+post_hook = "if [ -f /home/user/.config/niri/glow-material-you.enabled ]; then cp -f /home/user/.config/noctalia/templates/niri-glow-material-you.rendered.kdl /home/user/.config/niri/layout.kdl && command -v niri >/dev/null 2>&1 && niri msg action load-config-file; fi"
+
 [wallpaper]
 directory = "/home/user/图片/Wallpapers"
 fill_mode = "crop"
@@ -262,14 +267,15 @@ enabled = ["noctalia/mpvpaper"]
 min_length = 0
 
 [widget.clock]
-format = "{:%a, %d %b %H:%M}"
+format = "{:%m/%d/%y %H:%M}"
+
+[widget.media]
+hide_when_no_media = true
+max_length = 170
 
 [widget.tray]
 detached_panel = true
 drawer = true
-
-[widget."ray/echolyrics:echolyrics"]
-capsule = false
 
 [widget.ram]
 show_glyph = false

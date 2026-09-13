@@ -16,19 +16,35 @@
 | `label` | `<目录名>` | 菜单显示名 |
 | `detect` | `<目录名>` | 检测是否安装的命令名（纯名字，无 `binary:` 前缀 DSL） |
 
+### 预设继承控制（`[presets]` 表，可选）
+
+针对预设较多、希望支持轻量差异化预设（如 Niri `glow` 仅修改 `layout.kdl`）的应用，可通过 `[presets]` 表精确配置底版继承（Base Overlay）：
+
+| 字段 | 默认 | 作用 |
+|---|---|---|
+| `allow` | `[]` | **预设白名单**：仅列出的预设开启底版继承（未列出的保持 100% 独立） |
+| `standalone` | `[]` | **预设黑名单**：强制列出的预设独立部署，绝不继承底版 |
+| `inherit` | `false` | 全局继承开关（当 `allow` 与 `standalone` 均为空时的兜底策略） |
+| `include` | `[]` | **文件白名单**：仅从底版继承匹配这些 glob 的文件/目录（如 `["scripts/**", "*.kdl"]`） |
+| `exclude` | `[]` | **文件黑名单**：从底版继承时排除匹配这些 glob 的文件/目录 |
+
 文件型 app（`starship.toml`）用 **sidecar**：`configs/starship.toml.module.toml`（文件名 + `.module.toml`）。
 
 ### 实际 ship 的 manifest
 
 ```toml
-# configs/niri/.module.toml — monitor.kdl 被 config.kdl include 引用，不能改名走 dunder
+# configs/niri/.module.toml — monitor.kdl 被 include 引用；effects.kdl 为运行时护眼模式符号链接
 [packages]
-preserve = ["monitor.kdl"]
+preserve = ["monitor.kdl", "effects.kdl"]
 chmod = ["scripts/*.sh"]
 
-# configs/fish/.module.toml — clean-cache.py 不是 .sh，需声明 chmod
+[presets]
+allow = ["glow", "glow-material-you"]
+include = ["scripts/**", "*.kdl", "orbit-items__custom__.toml"]
+
+# 非 .sh 可执行脚本需声明 chmod（此处为示例）
 [packages]
-chmod = ["clean-cache.py"]
+chmod = ["helper.py"]
 
 # configs/noctalia/.module.toml — 三个主题脚本
 [packages]
@@ -45,7 +61,7 @@ detect = "starship"
 label = "Starship"
 ```
 
-kitty / fastfetch / zed **不写 manifest**（目录名 = 包名 = 二进制名 = 无例外），全默认即对。
+kitty / fastfetch / zed **不写 manifest**（目录名 = 包名 = 二进制名 = 无例外，presets 不开启继承保持独立），全默认即对。
 
 ## `.optional-apps.toml`（可选软件，无配置）
 
@@ -113,5 +129,5 @@ aur = ["rime-ice-git"]
 ## 边界
 
 不放进 manifest 的（会让它膨胀成小语言）：doctor 检查项、post-install hook、i18n 键。
-这些是 `DOCTOR_CHECKS` 列表 / 代码内联 / `TRANSLATIONS` dict 的事，manifest 只管"这个 app
+这些是 `DOCTOR_CHECKS` 列表 / 模块入口 / `translations.toml` 的事，manifest 只管"这个 app
 配置上有啥例外"。

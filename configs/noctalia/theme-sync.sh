@@ -14,7 +14,7 @@ KVANTUM_THEME_LIGHT="${NYXNIRI_KVANTUM_LIGHT:-KvLibadwaita}"
 DEFAULT_FALLBACK_MODE="${NYXNIRI_DEFAULT_MODE:-dark}"
 
 # 2. Concurrency Lock: Prevent race conditions from rapid toggles or startup hooks
-LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/nyxniri-theme-sync.lock"
+LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/nyxniri-${UID}-theme-sync.lock"
 exec 9>"$LOCK_FILE"
 flock -w 5 9 || {
     echo "[!] Theme sync locked by another process. Skipping." >&2
@@ -44,23 +44,23 @@ atomic_update_ini() {
         while IFS= read -r line || [ -n "$line" ]; do
             if [[ "$line" =~ ^\[Settings\] ]]; then
                 has_settings_header=1
-                echo "$line" >> "$tmp_file"
+                printf '%s\n' "$line" >> "$tmp_file"
                 continue
             fi
             if [[ "$line" =~ ^[[:space:]]*${escaped_key}[[:space:]]*= ]]; then
-                echo "${key}=${val}" >> "$tmp_file"
+                printf '%s\n' "${key}=${val}" >> "$tmp_file"
                 key_found=1
             else
-                echo "$line" >> "$tmp_file"
+                printf '%s\n' "$line" >> "$tmp_file"
             fi
         done < "$file"
     fi
 
     if [ "$key_found" -eq 0 ]; then
         if [ "$has_settings_header" -eq 0 ] && [ ! -s "$tmp_file" ]; then
-            echo "[Settings]" > "$tmp_file"
+            printf '%s\n' "[Settings]" > "$tmp_file"
         fi
-        echo "${key}=${val}" >> "$tmp_file"
+        printf '%s\n' "${key}=${val}" >> "$tmp_file"
     fi
 
     chmod 644 "$tmp_file" 2>/dev/null || true
@@ -211,6 +211,22 @@ fi
 # Kvantum Qt theme synchronization (silent INI update only if theme directory exists)
 if [ -d "/usr/share/Kvantum/$KVANTUM_THEME" ] || [ -d "$HOME/.config/Kvantum/$KVANTUM_THEME" ]; then
     atomic_update_ini "$HOME/.config/Kvantum/kvantum.kvconfig" "theme" "$KVANTUM_THEME"
+fi
+
+# Keep the fixed-blue glow's dark/light details in sync. Dynamic glow is
+# rendered by Noctalia's template post_hook and intentionally stays out here.
+GLOW_DIR="$HOME/.config/niri"
+GLOW_ACTIVE="$HOME/.config/NyxNiri/presets/niri.active"
+if [ -f "$GLOW_ACTIVE" ] && [ "$(cat "$GLOW_ACTIVE" 2>/dev/null)" = "glow" ]; then
+    GLOW_SOURCE="$GLOW_DIR/layout-${TARGET_MODE}.kdl"
+    GLOW_DEST="$GLOW_DIR/layout.kdl"
+    if [ -f "$GLOW_SOURCE" ] && { [ ! -f "$GLOW_DEST" ] || ! cmp -s "$GLOW_SOURCE" "$GLOW_DEST"; }; then
+        tmp=$(mktemp "${GLOW_DEST}.XXXXXX") || exit 0
+        cp "$GLOW_SOURCE" "$tmp" && mv -f "$tmp" "$GLOW_DEST"
+        if command -v niri >/dev/null 2>&1; then
+            niri msg action load-config-file >/dev/null 2>&1 || true
+        fi
+    fi
 fi
 
 # 9. Feedback for Interactive CLI Invocations

@@ -19,6 +19,17 @@ say() { if _lang_is_zh; then printf '%s' "$1"; else printf '%s' "${2:-$1}"; fi; 
 CACHE_DIR="$HOME/.cache/NyxNiri"
 BOOTSTRAP_URL="https://raw.githubusercontent.com/ech678/NyxNiri/main/install.sh"
 
+# Normalize XDG variables to prevent sandboxes (e.g. HOME=$(mktemp -d)) from leaking into the host
+if [ -n "${XDG_STATE_HOME:-}" ] && [[ "$XDG_STATE_HOME" != "$HOME/"* ]]; then
+    export XDG_STATE_HOME="$HOME/.local/state"
+fi
+if [ -n "${XDG_CONFIG_HOME:-}" ] && [[ "$XDG_CONFIG_HOME" != "$HOME/"* ]]; then
+    export XDG_CONFIG_HOME="$HOME/.config"
+fi
+if [ -n "${XDG_CACHE_HOME:-}" ] && [[ "$XDG_CACHE_HOME" != "$HOME/"* ]]; then
+    export XDG_CACHE_HOME="$HOME/.cache"
+fi
+
 GIT_MIRROR_REGISTRY=(
     "Official|https://github.com/ech678/NyxNiri.git"
     "gh-proxy.org|https://gh-proxy.org/https://github.com/ech678/NyxNiri.git"
@@ -98,8 +109,9 @@ engine_is_complete() {
     local target_dir="$1"
     local module
     [ -f "$target_dir/install.sh" ] || return 1
+    [ -f "$target_dir/nyxniri/translations.toml" ] || return 1
     # Top-level engine modules (infrastructure + entrypoints, §13)
-    for module in __init__ __main__ cli constants core deps doctor i18n network tui; do
+    for module in __init__ __main__ clean cli constants core deps doctor i18n menus network tui workflows; do
         [ -f "$target_dir/nyxniri/$module.py" ] || return 1
     done
     # deploy/ subpackage (atomic · manifest · templates · assets · hardware · preset · deploy)
@@ -107,11 +119,14 @@ engine_is_complete() {
         [ -f "$target_dir/nyxniri/deploy/$module.py" ] || return 1
     done
     # state/ subpackage (backup · uninstall)
+    for module in __init__ cli detection; do
+        [ -f "$target_dir/nyxniri/pkg/$module.py" ] || return 1
+    done
     for module in __init__ backup uninstall; do
         [ -f "$target_dir/nyxniri/state/$module.py" ] || return 1
     done
     # modules/ subpackage (fcitx · fisher · greeter · gtktheme)
-    for module in __init__ fcitx fisher greeter gtktheme; do
+    for module in __init__ fcitx fisher greeter gtktheme lifecycle; do
         [ -f "$target_dir/nyxniri/modules/$module.py" ] || return 1
     done
     [ -f "$target_dir/configs/niri/config.kdl" ] \

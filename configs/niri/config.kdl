@@ -26,15 +26,9 @@ environment {
     XDG_CURRENT_DESKTOP "niri"
     XDG_SESSION_TYPE "wayland"
     GTK_IM_MODULE ""
-    ELECTRON_OZONE_PLATFORM_HINT "auto"
     QT_QPA_PLATFORM "wayland;xcb"
     QT_QPA_PLATFORMTHEME "gtk3"
     QT_WAYLAND_DISABLE_WINDOWDECORATION "1"
-
-    // NVIDIA environment variables (uncommented automatically by install.sh if NVIDIA GPU is detected)
-    // GBM_BACKEND "nvidia-drm"
-    // __GLX_VENDOR_LIBRARY_NAME "nvidia"
-    // LIBVA_DRIVER_NAME "nvidia"
 }
 
 spawn-at-startup "~/.config/niri/scripts/start-noctalia.sh"

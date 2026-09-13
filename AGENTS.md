@@ -41,7 +41,7 @@
 |---|---|
 | `configs/` | Dotfiles 配置源码（niri、noctalia 等的 `.kdl` / 配置模板） |
 | `assets/` | 静态资产（`assets/wallpapers/` 离线壁纸、`assets/fcitx5/` 输入法皮肤） |
-| `nyxniri/` | Python 部署 / 诊断 / 备份核心引擎（零 pip 依赖，纯标准库），拆 `deploy/`·`state/`·`modules/`·`packaging/` 四子包（详见 llms-wiki/subpackages.md） |
+| `nyxniri/` | Python 管理引擎（零 pip 依赖，纯标准库）；`pkg/`·`deploy/`·`state/`·`modules/`·`packaging/` 各管一域（详见 llms-wiki/subpackages.md） |
 | `llms-wiki/` | LLM 友好架构 wiki（索引 `llms.txt`，按需取详情页） |
 | `install.sh` | 统一引导入口点，负责环境预检并 `exec python3 -m nyxniri` |
 
@@ -49,8 +49,8 @@
 的 `atomic_replace_item` 机制复制/替换，禁止 `ln -s` 软链接进 `~/.config/`
 （`~/.config/` 内部文件之间的软链接，如运行时主题切换，不受此限）。
 
-**Dunder Protocol**：文件名或目录名含 `__custom__`（如 `01__custom__.kdl`、自定义子目录）
-在更新时会被原子替换引擎识别并保留；`monitor.kdl` 等按名引用的文件走 manifest `preserve`
+**Dunder Protocol**：文件名或目录名含 `__custom__`（如 `__custom__.kdl`、`__custom__.conf`、自定义子目录）
+在更新时会被原子替换引擎识别并保留；各应用按自身机制加载（如 Niri 挂载 `__custom__.kdl`，可在其中继续引入其他 `*__custom__.kdl`；Fish 自动扫描 `conf.d/`）；`monitor.kdl` 等按名引用的文件走 manifest `preserve`
 声明保留（两套机制，不合并，详见 llms-wiki/file-preservation.md）。
 
 ---
@@ -91,7 +91,7 @@ HOME=$(mktemp -d) ./install.sh test
 | 文件/目录名含 `__custom__` | 更新时自动保留，不需手动处理 |
 | 脚本以 `id -u == 0` 运行 | `install.sh`/`nyxniri` 直接拒绝；系统级维护脚本（如 `clean-cache`）例外，允许要求 root |
 | `configs/` 模板里的 `/home/user` | 占位符，由部署引擎替换为目标 `$HOME`，勿改为硬编码 |
-| NVIDIA env 变量 | 默认注释，仅 `lspci` 检测后由部署引擎自动解注释，绝不能默认开启 |
+| GPU 环境变量 | 默认配置不指定驱动，部署不按 PCI 设备自动改写；诊断仅分类设备，不推断实际渲染 GPU |
 | 网络命令（curl 等） | 必须带 `--connect-timeout`，非关键调用加容错 |
 | 引擎代码（`nyxniri/`） | 避免硬编码特定项目名，用 `constants.py` 常量；TUI 文案可适当灵活 |
 | 改动涉及 wiki 描述的行为 | 同步更新 `llms-wiki/` 对应页，改完手验一遍 |
@@ -101,7 +101,7 @@ HOME=$(mktemp -d) ./install.sh test
 - **加 CLI 命令**：写 `_cmd_xxx(sub_args) -> int` handler，加一行到 `COMMANDS` 字典。退出码自动传播。
 - **加可选模块**（greeter/fcitx 同款 install|status|uninstall 三件套）：用 `_module_handler()` 工厂，一行注册。
 - **加 doctor 检查项**：写 `_check_xxx(env) -> None` 函数，append 到 `DOCTOR_CHECKS` 列表。不碰 `run_doctor()`。
-- **加 i18n 键**：在 `TRANSLATIONS` 字典加 `zh` + `en` 条目。`test_i18n.py` 自动校验无孤儿/无缺失。
+- **加 i18n 键**：在 `nyxniri/translations.toml` 加 `[键名]` 及 `zh` + `en` 条目。`test_i18n.py` 校验无孤儿/无缺失、双语字段与参数一致。
 
 **sed 转义**：
 ```bash

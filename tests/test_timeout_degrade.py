@@ -8,9 +8,12 @@ load-bearing; a timeout must skip the step and move on.
 """
 
 import subprocess
+import sys
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from subprocess import CompletedProcess
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from tests.utils import TempEnv
 
@@ -62,6 +65,71 @@ class TestPostInstallHooksIndependence(unittest.TestCase):
         mock_fisher.assert_called_once()
 
 
+class TestUserPostDeployHooks(unittest.TestCase):
+    def setUp(self):
+        self._ctx = TempEnv()
+        self._ctx.__enter__()
+        self.hooks_dir = self._ctx.env.nyx_dir / "hooks"
+
+    def tearDown(self):
+        self._ctx.__exit__()
+
+    def test_runs_scripts_in_filename_order_with_bash_argv(self):
+        from nyxniri.deploy.deploy import USER_HOOK_TIMEOUT, run_user_hooks
+
+        self.hooks_dir.mkdir(parents=True)
+        first = self.hooks_dir / "10-first.sh"
+        second = self.hooks_dir / "20-second.sh"
+        first.touch()
+        second.touch()
+        (self.hooks_dir / "ignored.txt").touch()
+        (self.hooks_dir / "directory.sh").mkdir()
+
+        with patch("nyxniri.deploy.deploy.timed_run", return_value=_cp(0)) as run:
+            self.assertEqual(run_user_hooks(), [])
+
+        self.assertEqual(run.call_args_list, [
+            call(["bash", str(first)], USER_HOOK_TIMEOUT, check=False),
+            call(["bash", str(second)], USER_HOOK_TIMEOUT, check=False),
+        ])
+
+    def test_timeout_and_failure_do_not_stop_later_hooks(self):
+        from nyxniri.deploy.deploy import run_user_hooks
+
+        self.hooks_dir.mkdir(parents=True)
+        hooks = [self.hooks_dir / name for name in ("10-timeout.sh", "20-failure.sh", "30-later.sh")]
+        for hook in hooks:
+            hook.touch()
+
+        with patch("nyxniri.deploy.deploy.timed_run", side_effect=[None, _cp(7), _cp(0)]) as run, \
+             patch("nyxniri.deploy.deploy.log_msg") as log, \
+             patch("builtins.print") as output:
+            diagnostics = run_user_hooks()
+
+        self.assertEqual(len(diagnostics), 2)
+        self.assertEqual(run.call_args_list, [
+            call(["bash", str(hooks[0])], 30, check=False),
+            call(["bash", str(hooks[1])], 30, check=False),
+            call(["bash", str(hooks[2])], 30, check=False),
+        ])
+        self.assertTrue(all(entry.kwargs == {"file": sys.stderr} for entry in output.call_args_list))
+        log.assert_has_calls([
+            call("WARN", f"User deploy hook {hooks[0].name} timed out after 30s"),
+            call("WARN", f"User deploy hook {hooks[1].name} exited with 7"),
+        ])
+
+    def test_completion_keeps_hook_diagnostics_after_clear_screen(self):
+        from nyxniri.deploy.deploy import render_completion_screen
+
+        output = StringIO()
+        with patch("sys.stdin.isatty", return_value=False), \
+             patch("nyxniri.deploy.deploy.show_logo"), \
+             redirect_stdout(output):
+            render_completion_screen(chosen_items=[], hook_diagnostics=["hook failed"])
+
+        self.assertIn("hook failed", output.getvalue().rsplit("\033[H\033[J", 1)[-1])
+
+
 class TestDepsTimeout(unittest.TestCase):
 
     def setUp(self):
@@ -72,30 +140,19 @@ class TestDepsTimeout(unittest.TestCase):
         self._ctx.__exit__()
 
     def test_pacman_timeout_degrades_to_empty_set(self):
-        import nyxniri.deps as deps_mod
-
-        deps_mod._PACMAN_INSTALLED_CACHE = None
-        try:
-            with patch("nyxniri.deps.timed_run", return_value=None):
-                self.assertEqual(deps_mod._get_pacman_installed(), set())
-        finally:
-            deps_mod._PACMAN_INSTALLED_CACHE = None
+        from nyxniri.pkg.detection import DependencyProbe
+        with patch("nyxniri.pkg.detection.timed_run", return_value=None):
+            self.assertEqual(DependencyProbe().packages, set())
 
     def test_fc_list_timeout_degrades_to_empty(self):
-        import nyxniri.deps as deps_mod
-
-        deps_mod._FC_LIST_CACHE = None
-        try:
-            with patch("nyxniri.deps.timed_run", return_value=None):
-                self.assertEqual(deps_mod._get_fc_list(), "")
-        finally:
-            deps_mod._FC_LIST_CACHE = None
+        from nyxniri.pkg.detection import DependencyProbe
+        with patch("nyxniri.pkg.detection.timed_run", return_value=None):
+            self.assertEqual(DependencyProbe().fonts, "")
 
     def test_gi_probe_timeout_reports_missing(self):
-        import nyxniri.deps as deps_mod
-
-        with patch("nyxniri.deps.timed_run", return_value=None):
-            self.assertFalse(deps_mod.is_dep_installed("python-gobject"))
+        from nyxniri.pkg.detection import DependencyProbe
+        with patch("nyxniri.pkg.detection.timed_run", return_value=None):
+            self.assertFalse(DependencyProbe().installed("python-gobject"))
 
 
 class TestDoctorTimeout(unittest.TestCase):
@@ -155,12 +212,16 @@ class TestGtkThemeTimeout(unittest.TestCase):
         self._ctx.__exit__()
 
     def test_render_timeout_degrades_to_pending(self):
+        from nyxniri.i18n import msg
         from nyxniri.modules.gtktheme import gtktheme_trigger_render
 
+        out = StringIO()
         with patch("nyxniri.modules.gtktheme.noctalia_available", return_value=True), \
              patch("nyxniri.modules.gtktheme.timed_run", return_value=None), \
-             patch("builtins.print"):
+             redirect_stdout(out):
             gtktheme_trigger_render()
+
+        self.assertIn(msg("gtk_render_pending"), out.getvalue())
 
 
 if __name__ == "__main__":
