@@ -323,7 +323,7 @@ def _restore_settings(path, state_file, section, owned):
         parser = _parse_ini(content)
         changes = {key: state.get(key) or None for key, value in owned.items()
                    if parser.get(section, key, fallback=None) == value}
-        updated = _edit_ini(content, section, changes)
+        updated = _edit_flat_config(content, changes) if section == "ClassicUI" else _edit_ini(content, section, changes)
         remaining = _parse_ini(updated)
         if state.get("Existed") != "1" and not any(dict(remaining[s]) for s in remaining.sections()):
             path.unlink()

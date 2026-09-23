@@ -142,7 +142,7 @@ class TestFcitxStartup(unittest.TestCase):
         from nyxniri.modules.fcitx import fcitx_set_theme_conf, fcitx_uninstall
         path = self.env.config_dir / "fcitx5/conf/classicui.conf"
         path.parent.mkdir(parents=True)
-        path.write_text("[ClassicUI]\nTheme=old\nDarkTheme=old-dark\n")
+        path.write_text("# original\nTheme=old\nDarkTheme=old-dark\nFont=custom\n")
         fcitx_set_theme_conf()
         path.write_text(path.read_text().replace("Theme=nyxmellow\n", "Theme=my-new-theme\n", 1))
         private = self.env.home / ".local/share/fcitx5/themes/nyxmellow/custom.txt"
@@ -152,6 +152,8 @@ class TestFcitxStartup(unittest.TestCase):
             self.assertTrue(fcitx_uninstall())
         self.assertIn("Theme=my-new-theme\n", path.read_text())
         self.assertIn("DarkTheme=old-dark\n", path.read_text())
+        self.assertNotIn("[ClassicUI]", path.read_text())
+        self.assertIn("Font=custom\n", path.read_text())
         self.assertEqual(private.read_text(), "mine")
 
     def test_install_preserves_shortcuts_and_is_repeatable(self):
