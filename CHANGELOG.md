@@ -8,13 +8,21 @@
 ## [Unreleased]
 
 ### Added
+- Niri 新增 xray-blur 预设，采用背景预模糊降低半透明窗口开销
 - 常用浏览器支持按需开启可变刷新率(VRR)，消除滚动与视频播放画面撕裂
+- 补全架构文档与按需参考手册，并增加文档链接有效性自动检查
+
 
 ### Changed
+- Fcitx5 皮肤设置现在会迁移旧配置并立即应用到候选框。
 - 默认不再指定 NVIDIA 驱动，并移除旧 Electron 显示设置；部分旧应用可能改用 XWayland。
 - 安装器和 Fish 使用同一套包管理规则，支持 Shelly，安装失败或超时会如实反馈。
 - 缓存清理统一为 `nyxniri clean`，原来的 Fish 和 Orbit 入口仍可用。
 - 安装输入法不再顺带启用皮肤；皮肤切换不改快捷键、不重启输入法，卸载保留个人改动。
+
+### Fixed
+- 修复深浅模式切换时 Fcitx5 皮肤未能动态跟随的问题；完善 D-Bus Addon 重载调用并增加 `--auto-start=no`，防止在输入法未启动时意外拉起后台守护进程。
+- 修复 Noctalia Greeter 的 Polkit 免密规则中的 Action ID，由错误的 `apply-appearance` 修正为实际生效的 `sync-appearance`，避免同步外观时索要 root 密码。
 
 ## [v3.0.5] - 2026-09-12
 
