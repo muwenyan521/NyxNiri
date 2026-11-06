@@ -21,9 +21,8 @@ if command -q fzf; and command -q fd
 end
 
 # ── 编辑器与手册 ──────────────────────────────────────────────────────────────
-# nyx-nvim 与 sysup 由各自插件部署到 ~/.config 下的独立目录。
+# nyx-nvim 是 ~/.local/bin 里的三行包装脚本（NVIM_APPNAME=nvim-nyx）。
 # git commit、yazi 这些走 $EDITOR 的程序用不上 fish 函数，只能靠 PATH。
-set -gx PATH "$HOME/.config/nyx-nvim" "$HOME/.config/sysup" $PATH
 if command -q nyx-nvim
     set -gx EDITOR nyx-nvim
     set -gx VISUAL nyx-nvim

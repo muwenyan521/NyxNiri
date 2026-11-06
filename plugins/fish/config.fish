@@ -123,16 +123,16 @@ function nyxhelp --description "NyxNiri Cheatsheet速查手册"
             return
         case cli
             set_color -o magenta; echo "  NyxNiri CLI & 配置快照"; set_color normal
-            set_color -o yellow; echo -n "    nyxuri                  "; set_color green; echo "-> 打开控制面板主菜单"; set_color normal
-            set_color -o yellow; echo -n "    nyxuri install config   "; set_color green; echo "-> 只部署配置，不安装依赖或壁纸"; set_color normal
-            set_color -o yellow; echo -n "    nyxuri update           "; set_color green; echo "-> 更新源码并选择是否部署配置"; set_color normal
-            set_color -o yellow; echo -n "    nyxuri doctor           "; set_color green; echo "-> 检查依赖、组件和桌面状态"; set_color normal
-            set_color -o yellow; echo -n "    nyxuri deps apps        "; set_color green; echo "-> 常用软件按类安装：Brave、Steam、微信、QQ 等"; set_color normal
-            set_color -o yellow; echo -n "    nyxuri snapshot [备注]  "; set_color green; echo "-> 创建配置快照"; set_color normal
-            set_color -o yellow; echo -n "    nyxuri snapshot delete  "; set_color green; echo "-> 选择并删除一个或多个快照"; set_color normal
-            set_color -o yellow; echo -n "    nyxuri rollback [序号]  "; set_color green; echo "-> 恢复历史配置快照"; set_color normal
-            set_color -o yellow; echo -n "    nyxuri list             "; set_color green; echo "-> 查看所有配置单元及状态"; set_color normal
-            set_color -o yellow; echo -n "    nyxuri theme status     "; set_color green; echo "-> 查看当前深浅主题状态"; set_color normal
+            set_color -o yellow; echo -n "    nyxniri                  "; set_color green; echo "-> 打开控制面板主菜单"; set_color normal
+            set_color -o yellow; echo -n "    nyxniri install config   "; set_color green; echo "-> 只部署配置，不安装依赖或壁纸"; set_color normal
+            set_color -o yellow; echo -n "    nyxniri update           "; set_color green; echo "-> 更新源码并选择是否部署配置"; set_color normal
+            set_color -o yellow; echo -n "    nyxniri doctor           "; set_color green; echo "-> 检查依赖、组件和桌面状态"; set_color normal
+            set_color -o yellow; echo -n "    nyxniri apps             "; set_color green; echo "-> 常用软件按类安装：Brave、Steam、微信、QQ 等"; set_color normal
+            set_color -o yellow; echo -n "    nyxniri snapshot [备注]  "; set_color green; echo "-> 创建配置快照"; set_color normal
+            set_color -o yellow; echo -n "    nyxniri snapshot delete  "; set_color green; echo "-> 选择并删除一个或多个快照"; set_color normal
+            set_color -o yellow; echo -n "    nyxniri rollback [序号]  "; set_color green; echo "-> 恢复历史配置快照"; set_color normal
+            set_color -o yellow; echo -n "    nyxniri list             "; set_color green; echo "-> 查看所有配置快照"; set_color normal
+            set_color -o yellow; echo -n "    nyxniri theme status     "; set_color green; echo "-> 查看当前深浅主题状态"; set_color normal
             return
         case proxy
             set_color -o magenta; echo "  网络代理控制"; set_color normal
@@ -267,7 +267,7 @@ if status is-interactive
     end
 
     function up --description "一键系统与软件包更新 (Arch / CachyOS)"
-        nyxuri pkg upgrade $argv
+        nyxniri pkg upgrade $argv
     end
     alias update='up'
 
@@ -275,16 +275,16 @@ if status is-interactive
         if test (count $argv) -eq 0
             se
         else
-            nyxuri pkg install $argv
+            nyxniri pkg install $argv
         end
     end
 
-        alias clean='nyxuri clean'
+    alias clean='nyxniri clean'
 
     # se：模糊搜索软件包 (支持 aur <kw> / pac <kw> 前缀) 并用 fzf 交互安装 (无 fzf 时自动降级)
     function se --description "Fuzzy search & install packages (aur/pac prefix)"
         if not command -v fzf &>/dev/null
-            nyxuri pkg search $argv
+            nyxniri pkg search $argv
             return
         end
 
@@ -294,14 +294,14 @@ if status is-interactive
             set fzf_query "$argv"
         end
 
-        set -l preview_cmd "nyxuri pkg info {2}"
+        set -l preview_cmd "nyxniri pkg info {2}"
 
         set -l header_str "aur <kw> → AUR | pac <kw> → repo | [Tab] multi-select"
 
-        set -l pkgs (nyxuri pkg search "$fzf_query" | fzf --multi --disabled --prompt='search > ' \
+        set -l pkgs (nyxniri pkg search "$fzf_query" | fzf --multi --disabled --prompt='search > ' \
             --header="$header_str" \
             --query="$fzf_query" \
-            --bind 'change:reload(nyxuri pkg search {q})' \
+            --bind 'change:reload(nyxniri pkg search {q})' \
             --preview "$preview_cmd" --preview-window 'right:60%:wrap')
 
         if test -n "$pkgs"
@@ -324,7 +324,7 @@ if status is-interactive
     function un --description "Fuzzy search & remove installed packages"
         if not command -v fzf &>/dev/null
             set_color yellow; echo "[!] fzf not found, falling back to installed list"; set_color normal
-            nyxuri pkg installed $argv
+            nyxniri pkg installed $argv
             return
         end
 
@@ -333,13 +333,13 @@ if status is-interactive
             set fzf_query "$argv"
         end
 
-        set -l pkgs (nyxuri pkg installed | fzf --multi --prompt='remove > ' \
+        set -l pkgs (nyxniri pkg installed | fzf --multi --prompt='remove > ' \
             --header='[Tab] multi-select | [Enter] remove | [Esc] cancel' \
             --query="$fzf_query" \
-            --preview 'nyxuri pkg info {1}' --preview-window 'right:60%:wrap')
+            --preview 'nyxniri pkg info {1}' --preview-window 'right:60%:wrap')
 
         if test -n "$pkgs"
-            nyxuri pkg remove $pkgs
+            nyxniri pkg remove $pkgs
         end
     end
     
@@ -429,12 +429,5 @@ if status is-interactive
     # Vivid is optional; use the Nyx file palette only when the generator and theme exist.
     if command -v vivid &>/dev/null; and test -f "$HOME/.config/vivid/themes/nyx.yml"
         set -gx LS_COLORS (vivid generate "$HOME/.config/vivid/themes/nyx.yml")
-    end
-
-    # Neovim profile lives in its own XDG app directory.
-    if command -q nvim
-        function nvim --description "Neovim with Nyx theme (NVIM_APPNAME=nvim-nyx)" --wraps nvim
-            NVIM_APPNAME=nvim-nyx command nvim $argv
-        end
     end
 end
