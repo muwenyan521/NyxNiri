@@ -1,0 +1,6 @@
+schemaVersion = 1
+id = "nvim-nyx"
+kinds = ["config"]
+packages = ["neovim"]
+optional = true
+category = "dev"

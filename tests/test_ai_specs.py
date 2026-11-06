@@ -357,7 +357,7 @@ class TestAISpecs(unittest.TestCase):
 
         # 3. The packages-only supply surface is executed: the 18 manifest-only
         # recommendation plugins are gone, no shipped manifest declares the
-        # retired keys, and the blueprint is 13 real plugins.
+        # retired keys, and the blueprint is the upstream set plus three personal plugins.
         retired_keys = ("deploy", "detect")
         shipped = [d for d in plugins.iterdir() if d.is_dir()]
         for d in shipped:
@@ -370,7 +370,7 @@ class TestAISpecs(unittest.TestCase):
                             line, rf"^\s*{dead}\s*=",
                             f"{d.name} still declares the retired key '{dead}'",
                         )
-        self.assertEqual(len(shipped), 13, "supply execution must leave 13 real plugins")
+        self.assertEqual(len(shipped), 16, "personal branch ships 16 real plugins")
         for gone in ("telegram", "steam", "vscode", "nautilus", "shelly", "quickshell"):
             self.assertFalse((plugins / gone).exists(), f"{gone} supply plugin must be gone")
 

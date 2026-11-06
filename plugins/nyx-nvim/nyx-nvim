@@ -1,0 +1,6 @@
+#!/bin/sh
+# 用 Nyx 的 Neovim 配置启动（NVIM_APPNAME=nvim-nyx → ~/.config/nvim-nyx）。
+#
+# fish 里的 nvim 函数只覆盖交互式命令行；git commit、yazi 这类走 $EDITOR
+# 的程序拿不到函数，所以给它一个真正在 PATH 上的入口。
+NVIM_APPNAME=nvim-nyx exec nvim "$@"
